@@ -14,6 +14,10 @@
 //      answer for any other view is not shown.
 //   3. Messaging's ContactConversationsQuery.v1 — the conversation to open per
 //      channel, so the page can lead into the existing «Сообщения».
+//   4. Identity Access's operator directory — the names of exactly the
+//      employees this card's «История связей» names as actors (Security W8),
+//      read only when there is one; anyone else stays out of the answer, and an
+//      unavailable directory leaves them «сотрудник».
 // Fleet and Messaging answers are enrichment: when one of them fails the page is
 // still shown, with that block marked partial, never with invented data. Nothing
 // here matches, merges or links; it only lays the three answers side by side.
@@ -35,6 +39,7 @@ import {
 import { readContactPersonCardV1 } from '@/modules/contacts/public/v1'
 import { DRIVER_LICENCE_MASK_V1, readDriverProfilesForContactsV3 } from '@/modules/fleet-operations/public/v1'
 import { contactConversationsV1 } from '@/modules/messaging/public/v1'
+import { listUserIdentitiesV1 } from '@/modules/identity-access/public/v1/user-directory'
 
 export type ContactPersonCardDriverProfileV1 = DriverProfileForContactV3 & {
   /** Which Contact of the lineage this row was matched through. */
@@ -66,6 +71,8 @@ export type ContactPersonCardViewV1 = {
   conversations: ContactPersonCardConversationV1[]
   /** True when the corresponding enrichment could not be read; the block is then shown as unavailable. */
   partial: { driverProfiles: boolean; conversations: boolean }
+  /** Directory names of exactly the employees the card's history names, by user id. */
+  staffNames: Record<string, string>
 }
 
 export type ContactPersonCardLoadResultV1 =
@@ -77,6 +84,8 @@ export type ContactPersonCardCompositionDependenciesV1 = {
   readContactPersonCard: (query: unknown) => Promise<ContactPersonCardResultV1>
   readDriverProfilesForContacts: (query: unknown) => Promise<DriverProfilesForContactsResultV3>
   readContactConversations: (query: unknown) => Promise<ContactConversationsResultV1>
+  /** Identity Access's operator directory; without it every employee in the history stays «сотрудник». */
+  readStaffDirectory?: () => Promise<ReadonlyArray<{ id: string; firstName: string; lastName: string }>>
 }
 
 /** Under a last-4 view a shown ВУ is either absent or starts with Fleet's mask. */
@@ -105,10 +114,22 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
       contactId: id,
       legacyYandexDriverId: id === card.contactId ? card.legacyYandexDriverId : null,
     }))
-    const [profiles, conversations] = await Promise.all([
+    const staffIds = [...new Set(card.linkHistory.flatMap(event => (event.actor.kind === 'staff' ? [event.actor.userId] : [])))]
+    const [profiles, conversations, directory] = await Promise.all([
       settle(() => deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V3, licenceView, subjects })),
       settle(() => deps.readContactConversations({ contract: CONTACT_CONVERSATIONS_QUERY_V1, contactIds: lineageIds.slice(0, 25) })),
+      staffIds.length === 0 || deps.readStaffDirectory === undefined
+        ? Promise.resolve({ ok: false as const })
+        : settle(deps.readStaffDirectory),
     ])
+    const staffNames: Record<string, string> = {}
+    if (directory.ok) {
+      for (const user of directory.value) {
+        if (!staffIds.includes(user.id)) continue
+        const name = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
+        if (name !== '') staffNames[user.id] = name
+      }
+    }
     const driverProfiles: ContactPersonCardDriverProfileV1[] = []
     // Fleet masks for the view it echoes. An answer for another view, or one
     // that shows a last-4 reader an unmasked ВУ, is never shown: the block is
@@ -173,6 +194,7 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
         conversations: [...byChannel.values()].map(accumulated => accumulated.view)
           .sort((left, right) => (left.channel < right.channel ? -1 : left.channel > right.channel ? 1 : 0)),
         partial: { driverProfiles: !profilesShown, conversations: !conversations.ok },
+        staffNames,
       },
     }
   }
@@ -184,5 +206,6 @@ export async function loadContactPersonCardV1(contactId: string): Promise<Contac
     readContactPersonCard: readContactPersonCardV1,
     readDriverProfilesForContacts: readDriverProfilesForContactsV3,
     readContactConversations: contactConversationsV1,
+    readStaffDirectory: listUserIdentitiesV1,
   })(contactId)
 }

@@ -273,8 +273,8 @@ const CONFIRMATION_DETAIL_TEXT: Record<string, string> = {
   confirmed: '', needs_reconciliation: 'требует сверки', contradicted: 'противоречие', revoked: 'отозвано',
 }
 
-function actorText(event: ContactPersonCardLinkEventV1): string | null {
-  if (event.actor.kind === 'staff') return 'сотрудник'
+function actorText(event: ContactPersonCardLinkEventV1, staffNames: Record<string, string>): string | null {
+  if (event.actor.kind === 'staff') return staffNames[event.actor.userId] ?? 'сотрудник'
   if (event.actor.kind === 'integration_admin') return 'администратор интеграций'
   if (event.actor.kind === 'system') return 'система'
   return null
@@ -285,14 +285,14 @@ function formatDateTime(value: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function HistoryList({ events }: { events: ContactPersonCardLinkEventV1[] }) {
+function HistoryList({ events, staffNames }: { events: ContactPersonCardLinkEventV1[]; staffNames: Record<string, string> }) {
   if (events.length === 0) return <Empty>Изменения связей пока не записаны.</Empty>
   return (
     <ul>
       {events.map((event, index) => {
         const detail = event.kind === 'communication_policy_changed' ? POLICY_DETAIL_TEXT[event.detail ?? ''] ?? null
           : event.kind === 'driver_profile_confirmed' ? CONFIRMATION_DETAIL_TEXT[event.detail ?? ''] || null : null
-        const actor = actorText(event)
+        const actor = actorText(event, staffNames)
         return (
           <li key={`${event.kind}-${event.at}-${index}`} className="flex flex-wrap items-center gap-2 border-b border-[#E4ECFC] px-4 py-2.5 last:border-b-0 text-[14px] text-[#0F172A]">
             <span>{LINK_EVENT_TEXT[event.kind]}{event.subject ? ` ${formatContactPhone(event.subject) ?? event.subject}` : ''}{detail ? ` — ${detail}` : ''}</span>
@@ -405,7 +405,7 @@ export default function PersonCardView({ view }: { view: ContactPersonCardViewV1
       </Section>
 
       <Section title="История связей" count={card.linkHistory.length}>
-        <HistoryList events={card.linkHistory} />
+        <HistoryList events={card.linkHistory} staffNames={view.staffNames ?? {}} />
       </Section>
     </div>
   )

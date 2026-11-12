@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CONTACT_PERSON_CARD_RESULT_V1, type ContactPersonCardV1 } from '@/contracts/contacts/v1'
 import { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V3 as DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, type DriverProfileForContactV3 as DriverProfileForContactV2 } from '@/contracts/fleet-operations/v3'
 import { CONTACT_CONVERSATIONS_RESULT_V1 } from '@/contracts/messaging/v1'
@@ -215,5 +215,44 @@ describe('loadContactPersonCardV1', () => {
       expect(result.view.partial.driverProfiles).toBe(true)
       expect(JSON.stringify(result)).not.toContain('345678')
     }
+  })
+})
+
+describe('«История связей» names the employees it shows (Security W8)', () => {
+  const staffEvent = (userId: string) => ({ kind: 'phone_added_or_verified' as const, at: '2026-11-12T08:00:00.000Z', subject: null, detail: null, mode: 'manual' as const, actor: { kind: 'staff' as const, userId } })
+
+  async function load(linkHistory: unknown[], directory?: () => Promise<Array<{ id: string; firstName: string; lastName: string }>>) {
+    const calls: string[] = []
+    const compose = createContactPersonCardCompositionV1({
+      async readContactPersonCard() {
+        return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card({ linkHistory: linkHistory as never }), licenceView: 'full' } as never
+      },
+      async readDriverProfilesForContacts(query) {
+        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: (query as { licenceView: 'full' }).licenceView, entries: [] } as never
+      },
+      async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+      ...(directory ? { readStaffDirectory: async () => { calls.push('directory'); return directory() } } : {}),
+    })
+    return { result: await compose('c-1'), calls }
+  }
+
+  it('answers names for exactly the employees in the history, and nobody else', async () => {
+    const { result, calls } = await load([staffEvent('u1'), staffEvent('u1')], async () => [
+      { id: 'u1', firstName: 'Анна', lastName: 'Смирнова' },
+      { id: 'u9', firstName: 'Чужой', lastName: 'Сотрудник' },
+    ])
+    expect(calls).toEqual(['directory'])
+    expect(result).toMatchObject({ status: 'confirmed', view: { staffNames: { u1: 'Анна Смирнова' } } })
+    expect(JSON.stringify(result)).not.toContain('Чужой')
+  })
+
+  it('does not read the directory when no employee is named, and survives a directory failure', async () => {
+    const quiet = await load([{ ...staffEvent('x'), actor: { kind: 'system' } }], async () => [{ id: 'u1', firstName: 'Анна', lastName: 'Смирнова' }])
+    expect(quiet.calls).toEqual([])
+    expect(quiet.result).toMatchObject({ view: { staffNames: {} } })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const failed = await load([staffEvent('u1')], async () => { throw new Error('directory down') })
+    log.mockRestore()
+    expect(failed.result).toMatchObject({ status: 'confirmed', view: { staffNames: {} } })
   })
 })

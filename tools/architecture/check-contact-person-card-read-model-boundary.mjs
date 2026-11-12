@@ -200,6 +200,16 @@ function assertComposition(read = readRepo) {
   assert(composition.includes("return licenceView === 'full' || licence === null || licence.startsWith(DRIVER_LICENCE_MASK_V1)"), 'the composition no longer checks Fleet\'s mask for a last-4 reader')
   assert(composition.includes('readDriverProfilesForContacts: readDriverProfilesForContactsV3,'), 'the card is not bound to Fleet\'s v3 read (masked ВУ, profile phone and employment)')
   assert(!composition.includes('readDriverProfilesForContactsV1'), 'the card still reads Fleet\'s v1 profiles')
+  // Security W8: the directory is read only after Contacts confirmed, only when the
+  // history names an employee, and answers names of exactly those employees.
+  order(composition, [
+    "if (answer.status !== 'confirmed') return { status: answer.status }",
+    "const staffIds = [...new Set(card.linkHistory.flatMap(event => (event.actor.kind === 'staff' ? [event.actor.userId] : [])))]",
+    'staffIds.length === 0 || deps.readStaffDirectory === undefined',
+    'settle(deps.readStaffDirectory)',
+    'if (!staffIds.includes(user.id)) continue',
+  ], 'the composition staff names')
+  assert(composition.includes('readStaffDirectory: listUserIdentitiesV1,'), 'the staff names are not bound to Identity Access\'s directory')
   const page = withoutComments(read(PAGE))
   assert(page.includes("if (result.status === 'redirected') redirect("), 'a merged-away id is no longer followed to its canonical Contact')
   assert(page.includes("if (result.status === 'missing') notFound()"), 'a missing Contact is no longer a 404')
@@ -268,6 +278,8 @@ const MUTANTS = [
   [COMPOSITION, '&& profiles.value.licenceView === licenceView', ''],
   [COMPOSITION, "return licenceView === 'full' || licence === null || licence.startsWith(DRIVER_LICENCE_MASK_V1)", 'return true'],
   [COMPOSITION, 'readDriverProfilesForContacts: readDriverProfilesForContactsV3,', 'readDriverProfilesForContacts: readDriverProfilesForContactsV1,'],
+  [COMPOSITION, '        if (!staffIds.includes(user.id)) continue\n', ''],
+  [COMPOSITION, 'staffIds.length === 0 || deps.readStaffDirectory === undefined', 'deps.readStaffDirectory === undefined'],
   [LICENCE_SEARCH, "const licenceView = authority.licenceView === 'full' ? 'full' : 'last4'", "const licenceView = authority.licenceView ?? 'full'"],
   [LICENCE_SEARCH, "if (authority.decision !== 'allow') return { status: 'denied' }", ''],
   [LICENCE_SEARCH, 'if (!answer.profiles.every(profile => maskedForView(profile.licence, licenceView))) {', 'if (false) {'],
