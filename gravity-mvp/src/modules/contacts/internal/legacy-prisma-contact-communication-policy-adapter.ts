@@ -213,6 +213,35 @@ export function makePrismaContactCommunicationPolicyReadPortV1(
 
 export const legacyPrismaContactCommunicationPolicyReadPortV1 = makePrismaContactCommunicationPolicyReadPortV1(prisma)
 
+export type ContactCommunicationPolicyHistoryRowV1 = {
+  eventId: string
+  cause: string
+  actor: string
+  recordedAt: Date
+  afterDenyAll: boolean
+  afterDenyMessage: boolean
+  afterDenyVoice: boolean
+}
+
+/**
+ * Read-only: the newest policy events of one Contact lineage, for the person
+ * card's «История связей» (Contact Identity V2). It reads inside the caller's
+ * snapshot, so the card's history and the rest of the card are one picture;
+ * this file stays the only one that touches the two policy models.
+ */
+export async function readContactCommunicationPolicyHistoryV1(
+  tx: Pick<Prisma.TransactionClient, 'contactCommunicationPolicyEvent'>,
+  contactIds: readonly string[],
+  take: number,
+): Promise<ContactCommunicationPolicyHistoryRowV1[]> {
+  return tx.contactCommunicationPolicyEvent.findMany({
+    where: { contactId: { in: [...contactIds] } },
+    select: { eventId: true, cause: true, actor: true, recordedAt: true, afterDenyAll: true, afterDenyMessage: true, afterDenyVoice: true },
+    orderBy: [{ recordedAt: 'desc' }, { eventId: 'asc' }],
+    take,
+  })
+}
+
 /**
  * The mutation runs under CNT1 with the Contact's ownership rows locked, which
  * is the same admission every Contact merge and merge recovery takes, so a

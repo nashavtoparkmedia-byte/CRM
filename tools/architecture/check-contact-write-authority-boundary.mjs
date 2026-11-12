@@ -39,6 +39,7 @@ const API = 'gravity-mvp/src/app/api'
 const WRITE_ROUTES = [
   `${API}/contact-merges/[id]/recover/route.ts`,
   `${API}/contacts/[id]/chats/route.ts`,
+  `${API}/contacts/[id]/communication-policy/route.ts`,
   `${API}/contacts/[id]/driver-person/route.ts`,
   `${API}/contacts/[id]/identities/[identityId]/phone/route.ts`,
   `${API}/contacts/[id]/merge-to/[targetId]/route.ts`,
@@ -55,7 +56,7 @@ const MUTATING = /export\s+(?:async\s+)?function\s+(POST|PUT|PATCH|DELETE)\s*\(|
 const CLIENT_IDENTITY = /crm_user_id|getCurrentUser|user-service|cookies\s*\(|headers\s*\(|getMobileSessionPrincipalV1|hasMobileSessionV1|MOBILE_SESSION_COOKIE|writeDerivedUiIdentityCookie/u
 const ROUTE_IDENTITY = /crm_user_id|getCurrentUser|user-service|cookies\s*\(|getIntegrationAdminPrincipal|getStaffSessionPrincipalV1|getMobileSessionPrincipalV1|CONTACT_TRANSITIONAL_ADMIN_ACTOR_V1|identity-access:integration-admin-session/u
 const ACTOR_FIELD = /\b(actor|requestedBy|confirmedBy|mergedBy|verifiedBy|createdBy|changedBy|performedBy)\s*:\s*([^,\n}]+)/gu
-const SAME_ORIGIN_PREAMBLE = /^\s*if \(!isExactSameOriginMutationRequest\((\w+)\)\) \{\s*return NextResponse\.json\(\{ error: 'Forbidden' \}, \{ status: 403 \}\)\s*\}\s*$/u
+const SAME_ORIGIN_PREAMBLE = /^\s*if \(!isExactSameOriginMutationRequest\((\w+)\)(?: \|\| !isJsonMutationRequest\(\1\))?\) \{\s*return NextResponse\.json\(\{ error: 'Forbidden' \}, \{ status: 403 \}\)\s*\}\s*$/u
 const GATE = /^(?:const (\w+) = await resolveContactWriteAuthorityV1\(\)\s*if \(\1\.decision !== 'allow'\) \{|if \(\(await resolveContactWriteAuthorityV1\(\)\)\.decision !== 'allow'\) \{)\s*return NextResponse\.json\(\{ error: 'Unauthorized' \}, \{ status: 401 \}\)\s*\}/u
 
 export function passingProofCount(stdout) {

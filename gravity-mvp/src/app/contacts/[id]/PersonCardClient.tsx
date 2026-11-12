@@ -343,9 +343,117 @@ function AddPhoneDialog({ contactId, onClose }: { contactId: string; onClose: ()
   )
 }
 
+// ── Block 3: «Ограничения связи» (Q4: three flags, a required reason, every staff role sets and lifts) ──
+
+type Restriction = { denyAll: boolean; denyMessage: boolean; denyVoice: boolean }
+type RestrictionState = { version: number; restriction: Restriction }
+
+const RESTRICTION_FLAGS: Array<{ key: keyof Restriction; label: string; hint: string }> = [
+  { key: 'denyAll', label: 'Не связываться совсем', hint: 'ни сообщений, ни звонков' },
+  { key: 'denyMessage', label: 'Не писать', hint: 'сообщения во всех мессенджерах' },
+  { key: 'denyVoice', label: 'Не звонить', hint: 'обычные и ИИ-звонки' },
+]
+
+export function restrictionSummaryV1(restriction: Restriction): string {
+  if (restriction.denyAll) return 'не связываться совсем'
+  const parts = [restriction.denyMessage ? 'не писать' : null, restriction.denyVoice ? 'не звонить' : null].filter(Boolean)
+  return parts.length === 0 ? 'нет' : parts.join(' · ')
+}
+
+async function readRestriction(contactId: string): Promise<RestrictionState | { refused: number }> {
+  const response = await fetch(`/api/contacts/${encodeURIComponent(contactId)}/communication-policy`, { cache: 'no-store' })
+  if (!response.ok) return { refused: response.status }
+  const body = await readJson(response)
+  const restriction = body.restriction as Restriction | undefined
+  if (typeof body.version !== 'number' || !restriction) return { refused: 500 }
+  return { version: body.version, restriction }
+}
+
+function newRequestId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `card-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function RestrictionsDialog({ contactId, current, onClose, onSaved }: {
+  contactId: string
+  current: RestrictionState
+  onClose: () => void
+  onSaved: (state: RestrictionState) => void
+}) {
+  const [draft, setDraft] = useState<Restriction>(current.restriction)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // One id per decision: a retry of the same click replays instead of deciding twice.
+  const [requestId] = useState(newRequestId)
+  const unchanged = RESTRICTION_FLAGS.every(flag => draft[flag.key] === current.restriction[flag.key])
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault()
+    if (busy) return
+    if (reason.trim() === '') { setError('Укажите причину.'); return }
+    setBusy(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/contacts/${encodeURIComponent(contactId)}/communication-policy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, expectedVersion: current.version, restriction: draft, reason }),
+      })
+      const body = await readJson(response)
+      if (response.ok && typeof body.version === 'number') { onSaved({ version: body.version, restriction: body.restriction as Restriction }); return }
+      if (response.status === 409 && body.code === 'VERSION_CONFLICT') setError('Пока окно было открыто, ограничения изменил кто-то другой. Закройте окно и откройте заново.')
+      else if (response.status === 409 && body.code === 'CONTACT_MERGED') setError('Этот контакт объединён с другим. Откройте итоговую карточку.')
+      else if (response.status === 400) setError('Укажите причину и проверьте выбранные ограничения.')
+      else setError(REFUSALS[response.status] ?? 'Ограничения не сохранены.')
+    } catch {
+      setError('Ограничения не сохранены: сервер недоступен.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal title="Ограничения связи" onClose={onClose}>
+      <form onSubmit={save}>
+        <ul className="rounded-xl border border-[#E4ECFC]">
+          {RESTRICTION_FLAGS.map(flag => (
+            <li key={flag.key} className="border-b border-[#E4ECFC] last:border-b-0">
+              <label className="flex min-h-[56px] cursor-pointer items-center justify-between gap-3 px-4">
+                <span>
+                  <span className="block text-[15px] font-medium text-[#0F172A]">{flag.label}</span>
+                  <span className="block text-[12px] text-[#64748B]">{flag.hint}</span>
+                </span>
+                <input type="checkbox" role="switch" aria-label={flag.label} checked={draft[flag.key]}
+                  onChange={event => setDraft({ ...draft, [flag.key]: event.target.checked })}
+                  className="h-5 w-5 accent-[#2AABEE]" />
+              </label>
+            </li>
+          ))}
+        </ul>
+        <label htmlFor="restriction-reason" className="mt-4 block text-[13px] font-medium text-[#0F172A]">Причина</label>
+        <textarea id="restriction-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={512} rows={2}
+          placeholder="Например: просил не звонить"
+          className="mt-1 w-full rounded-lg border border-[#E4ECFC] px-3 py-2 text-[15px] outline-none focus:border-[#2AABEE]" />
+        {error && <div className="mt-3 text-[13px] text-[#DC2626]" role="alert">{error}</div>}
+        <button type="submit" disabled={busy || unchanged} className="mt-4 h-11 rounded-lg bg-[#2AABEE] px-4 text-[15px] font-semibold text-white hover:bg-[#1E96D4] disabled:opacity-60">
+          {busy ? 'Сохраняю…' : 'Сохранить'}
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
 export function CardActions({ contactId, displayName, conversations }: { contactId: string; displayName: string; conversations: CardConversationV1[] }) {
   const router = useRouter()
-  const [open, setOpen] = useState<'merge' | 'phone' | 'driver' | 'messages' | null>(null)
+  const [open, setOpen] = useState<'merge' | 'phone' | 'driver' | 'messages' | 'restrictions' | null>(null)
+  const [restriction, setRestriction] = useState<RestrictionState | { refused: number } | null>(null)
+  useEffect(() => {
+    let live = true
+    readRestriction(contactId).then(state => { if (live) setRestriction(state) }, () => { if (live) setRestriction({ refused: 503 }) })
+    return () => { live = false }
+  }, [contactId])
   const sorted = useMemo(() => [...conversations].sort((a, b) => a.channelLabel.localeCompare(b.channelLabel)), [conversations])
   const button = 'flex h-11 flex-1 min-w-[180px] items-center justify-center gap-2 rounded-lg border border-[#E4ECFC] px-4 text-[15px] font-medium text-[#2AABEE] hover:bg-[#F1F5FD]'
   return (
@@ -358,6 +466,15 @@ export function CardActions({ contactId, displayName, conversations }: { contact
           title={sorted.length === 0 ? 'Переписок с этим человеком нет' : undefined}>
           Открыть в сообщениях
         </button>
+        <button type="button" className={button} disabled={restriction === null || 'refused' in restriction} onClick={() => setOpen('restrictions')}>
+          Ограничения связи
+        </button>
+      </div>
+      <div className="mt-3 text-[13px] text-[#64748B]" data-testid="restriction-summary">
+        {'Ограничения связи: '}
+        {restriction === null ? 'загружаю…'
+          : 'refused' in restriction ? (restriction.refused === 401 ? 'нет прав на просмотр' : 'сейчас недоступны')
+          : <span className={restriction.restriction.denyAll || restriction.restriction.denyMessage || restriction.restriction.denyVoice ? 'font-medium text-[#DC2626]' : undefined}>{restrictionSummaryV1(restriction.restriction)}</span>}
       </div>
       {open === 'messages' && sorted.length > 0 && (
         <ul className="mt-3 rounded-xl border border-[#E4ECFC]">
@@ -373,6 +490,10 @@ export function CardActions({ contactId, displayName, conversations }: { contact
       )}
       {open === 'merge' && <MergeDialog contactId={contactId} displayName={displayName} onClose={() => setOpen(null)} />}
       {open === 'phone' && <AddPhoneDialog contactId={contactId} onClose={() => setOpen(null)} />}
+      {open === 'restrictions' && restriction !== null && !('refused' in restriction) && (
+        <RestrictionsDialog contactId={contactId} current={restriction} onClose={() => setOpen(null)}
+          onSaved={state => { setRestriction(state); setOpen(null); router.refresh() }} />
+      )}
       <DriverPersonSearchModal contactId={contactId} isOpen={open === 'driver'} onClose={() => setOpen(null)} onConfirmed={() => { setOpen(null); router.refresh() }} />
     </div>
   )

@@ -11,6 +11,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-lineage-handler'
 import { makePrismaContactLineagePortV1 } from './prisma-contact-lineage-port'
+import { readContactCommunicationPolicyHistoryV1 } from './legacy-prisma-contact-communication-policy-adapter'
 import type { ContactPersonCardSourcePortV1, ContactPersonCardSourceV1 } from './contact-person-card'
 
 type ContactPersonCardSourceClient = Pick<typeof prisma, '$transaction'>
@@ -74,12 +75,7 @@ export function makePrismaContactPersonCardSourcePortV1(client: ContactPersonCar
           orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
           take: 100,
         })
-        const policyEvents = await tx.contactCommunicationPolicyEvent.findMany({
-          where: { contactId: { in: lineageIds } },
-          select: { eventId: true, cause: true, actor: true, recordedAt: true, afterDenyAll: true, afterDenyMessage: true, afterDenyVoice: true },
-          orderBy: [{ recordedAt: 'desc' }, { eventId: 'asc' }],
-          take: 50,
-        })
+        const policyEvents = await readContactCommunicationPolicyHistoryV1(tx, lineageIds, 50)
         return {
           id: contact.id,
           displayName: contact.displayName,

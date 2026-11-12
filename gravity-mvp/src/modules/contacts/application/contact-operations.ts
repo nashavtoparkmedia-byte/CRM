@@ -53,9 +53,12 @@ import { resolveContactWriteAuthorityFromIdentityAccessV1 } from '../internal/id
 import { legacyPrismaContactMergePreviewSourcesV1 } from '../internal/legacy-prisma-contact-merge-preview-adapter'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
 import {
+    CONTACT_COMMUNICATION_NO_RESTRICTION_V1,
     createContactCommunicationPermissionQueryHandlerV1,
     createSetContactCommunicationPolicyHandlerV1,
+    restrictionStateOfV1,
 } from '../public/v1/contact-communication-policy'
+import type { ContactCommunicationRestrictionStateV1 } from '@/contracts/contacts/v1'
 import {
     legacyPrismaContactCommunicationPolicyMutationPortV1,
     legacyPrismaContactCommunicationPolicyReadPortV1,
@@ -148,6 +151,27 @@ const searchContacts = createSearchContactsHandlerV1(legacyPrismaContactLookupPo
 export const searchContactsV1 = (...args: Parameters<typeof searchContacts>) => searchContacts(...args)
 export const getContactCommunicationPermissionV1 = (...args: Parameters<typeof getContactCommunicationPermission>) => getContactCommunicationPermission(...args)
 export const setContactCommunicationPolicyV1 = (...args: Parameters<typeof setContactCommunicationPolicy>) => setContactCommunicationPolicy(...args)
+
+export type ContactCommunicationRestrictionReadV1 =
+    | { status: 'unknown' }
+    | { status: 'found'; canonicalContactId: string; isArchived: boolean; version: number; restriction: ContactCommunicationRestrictionStateV1 }
+
+/**
+ * «Ограничения связи» on the person card (V2, Q4): the canonical Contact's
+ * standing restriction and the version a change must name, read in the same one
+ * snapshot the permission query uses. Lineage errors propagate.
+ */
+export async function readContactCommunicationRestrictionV1(contactId: string): Promise<ContactCommunicationRestrictionReadV1> {
+    const state = await legacyPrismaContactCommunicationPolicyReadPortV1.readPermissionState(contactId)
+    if (state.kind === 'unknown') return { status: 'unknown' }
+    return {
+        status: 'found',
+        canonicalContactId: state.canonicalContactId,
+        isArchived: state.isArchived,
+        version: state.policy?.version ?? 0,
+        restriction: restrictionStateOfV1(state.policy ?? CONTACT_COMMUNICATION_NO_RESTRICTION_V1),
+    }
+}
 
 export type { ContactCardConversationResolverV1 }
 /**

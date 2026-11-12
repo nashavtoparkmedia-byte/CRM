@@ -13,7 +13,10 @@
 // the Contact's rows locked, decides replay before anything else, compares and
 // sets the version and never upserts or deletes; that exactly one Contacts
 // store persists the two policy models and nothing outside Contacts can reach
-// the mutation path at all; that a merge composes deny-wins and records the
+// the mutation path except the one admitted adopter, the person card's
+// «Ограничения связи» route (Contact Identity V2 Q4, Security W4), which asks
+// Contacts' write authority first, records only the actor it answered, requires
+// a reason and answers a stale version with 409; that a merge composes deny-wins and records the
 // evidence recovery needs; that recovery reverses a composition only when the
 // append-only event chain proves nothing newer was decided, at a new version;
 // that the migration carries the version-chain and append-only guards and
@@ -52,6 +55,8 @@ const RECOVERY_ADAPTER = 'gravity-mvp/src/modules/contacts/internal/legacy-prism
 const RECOVERY_ADAPTER_PROOF = 'gravity-mvp/src/modules/contacts/internal/legacy-prisma-automated-merge-recovery-adapter.test.ts'
 const POSTGRES_PROOF = 'gravity-mvp/src/modules/contacts/internal/contact-communication-policy.postgres.test.ts'
 const OPERATIONS = 'gravity-mvp/src/modules/contacts/application/contact-operations.ts'
+/** The one admitted adopter of the mutation outside the Contacts module (V2 Q4, Security W4). */
+const CARD_ADOPTER = 'gravity-mvp/src/app/api/contacts/[id]/communication-policy/route.ts'
 const PUBLIC_INDEX = `${MODULE_DIR}/index.ts`
 const MIGRATION = 'gravity-mvp/prisma/migrations/20261007180000_add_contact_communication_policy_foundation/migration.sql'
 const SCHEMA = 'gravity-mvp/prisma/schema.prisma'
@@ -292,7 +297,8 @@ function assertSingleStoreAndContainedMutation(sources) {
   const writers = sources[DELEGATE_WRITERS].split('\n').map((line) => line.trim()).filter(Boolean).sort()
   assert.deepEqual(writers, [ADAPTER], `the policy delegates are reached outside the one Contacts store: ${writers.join(', ')}`)
   const consumers = sources[MUTATION_CONSUMERS].split('\n').map((line) => line.trim()).filter(Boolean).sort()
-  assert.deepEqual(consumers, [], `the Contacts mutation path is reachable outside Contacts: ${consumers.join(', ')}`)
+  assert.deepEqual(consumers, [CARD_ADOPTER], `the Contacts mutation path is reachable outside Contacts beyond its one admitted adopter: ${consumers.join(', ')}`)
+  assertCardAdopter(sources)
   const index = withoutComments(sources[PUBLIC_INDEX])
   for (const name of MUTATION_PATH_NAMES) {
     assert(!index.includes(name), `the public Contacts surface exports the mutation path: ${name}`)
@@ -305,6 +311,48 @@ function assertSingleStoreAndContainedMutation(sources) {
   for (const relative of [MERGE_ADAPTER, RECOVERY_ADAPTER]) {
     assert(sources[relative].includes('makePrismaContactCommunicationPolicyStoreV1'), `${relative} does not go through the Contacts policy store`)
   }
+}
+
+/**
+ * 7b. The person card's «Ограничения связи» route is the one adopter: the
+ * write authority right after the same-origin JSON check and before the body,
+ * the actor only from its answer, the command built field by field, a required
+ * reason, and a stale version answered 409.
+ */
+function assertCardAdopter(sources) {
+  const adopter = withoutComments(sources[CARD_ADOPTER])
+  assert(adopter.includes("import {\n  readContactCommunicationRestrictionV1,\n  setContactCommunicationPolicyV1,\n} from '@/modules/contacts/application/contact-operations'"),
+    'the card adopter does not take exactly the mutation and its read from the Contacts application layer')
+  for (const name of MUTATION_PATH_NAMES.filter((candidate) => !['setContactCommunicationPolicyV1', 'SET_CONTACT_COMMUNICATION_POLICY_COMMAND_V1'].includes(candidate))) {
+    assert(!adopter.includes(name), `the card adopter reaches the mutation machinery itself: ${name}`)
+  }
+  const post = adopter.slice(adopter.indexOf('export async function POST('))
+  const order = [
+    'if (!isExactSameOriginMutationRequest(req) || !isJsonMutationRequest(req)) {',
+    'const authority = await resolveContactWriteAuthorityV1()',
+    "if (authority.decision !== 'allow') {",
+    "return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })",
+    'await req.json()',
+    'await setContactCommunicationPolicyV1({',
+  ]
+  let cursor = -1
+  for (const needle of order) {
+    const at = post.indexOf(needle, cursor + 1)
+    assert(at > cursor, `the card adopter no longer does ${needle} at its place`)
+    cursor = at
+  }
+  const preamble = post.slice(post.indexOf('{', post.indexOf(') {') ) + 1, post.indexOf('const authority = await resolveContactWriteAuthorityV1()'))
+  assert(/^\s*if \(!isExactSameOriginMutationRequest\(req\) \|\| !isJsonMutationRequest\(req\)\) \{\s*return NextResponse\.json\(\{ error: 'Forbidden' \}, \{ status: 403 \}\)\s*\}\s*$/u.test(preamble),
+    'the card adopter does something besides the same-origin JSON check before the write authority')
+  assert.equal((adopter.match(/setContactCommunicationPolicyV1\(/gu) ?? []).length, 1, 'the card adopter changes the policy more than once')
+  const command = post.slice(post.indexOf('await setContactCommunicationPolicyV1({'), post.indexOf('})', post.indexOf('await setContactCommunicationPolicyV1({')))
+  assert(!command.includes('...'), 'the card adopter spreads a value into the command')
+  assert.deepEqual([...command.matchAll(/^\s+(\w+):/gmu)].map((match) => match[1]),
+    ['contract', 'requestId', 'contactId', 'expectedVersion', 'restriction', 'actor', 'reason'], 'the card adopter builds a different command')
+  assert(command.includes('actor: authority.actor,') && command.includes('contactId: id,'), 'the card adopter records an actor or a Contact the authority and the path did not give')
+  assert.equal((adopter.match(/\bactor:/gu) ?? []).length, 1, 'the card adopter names an actor somewhere else')
+  assert(adopter.includes("if (reason === '') return null"), 'the card adopter accepts a change without a reason')
+  assert(adopter.includes("return json({ error: 'Conflict', code: 'VERSION_CONFLICT', currentVersion: result.currentVersion }, 409)"), 'the card adopter does not answer a stale version with 409')
 }
 
 /** 8. A merge composes deny-wins, in both full-merge paths, and records the evidence. */
@@ -533,6 +581,15 @@ const PROBES = [
   ['read_not_snapshot', 'mutation_under_ownership', (s) => ({ ...s, [ADAPTER]: s[ADAPTER].replace(', { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })', ')') })],
   ['second_writer_appears', 'single_store_contained_mutation', (s) => ({ ...s, [DELEGATE_WRITERS]: `${s[DELEGATE_WRITERS]}gravity-mvp/src/modules/messaging/internal/policy-shortcut.ts\n` })],
   ['mutation_imported_by_messaging', 'single_store_contained_mutation', (s) => ({ ...s, [MUTATION_CONSUMERS]: 'gravity-mvp/src/modules/messaging/application/messaging-operations.ts\n' })],
+  ['second_adopter_appears', 'single_store_contained_mutation', (s) => ({ ...s, [MUTATION_CONSUMERS]: `${s[MUTATION_CONSUMERS]}gravity-mvp/src/app/api/drivers/[id]/restrictions/route.ts\n` })],
+  ['card_adopter_removed_from_scan', 'single_store_contained_mutation', (s) => ({ ...s, [MUTATION_CONSUMERS]: '' })],
+  ['card_adopter_skips_write_authority', 'single_store_contained_mutation', (s) => ({ ...s, [CARD_ADOPTER]: s[CARD_ADOPTER].replace('const authority = await resolveContactWriteAuthorityV1()', "const authority = { decision: 'allow', actor: 'staff:anyone' } as const") })],
+  ['card_adopter_reads_body_first', 'single_store_contained_mutation', (s) => ({ ...s, [CARD_ADOPTER]: s[CARD_ADOPTER].replace("  if (!isExactSameOriginMutationRequest(req) || !isJsonMutationRequest(req)) {", "  const early = await req.clone().json()\n  void early\n  if (!isExactSameOriginMutationRequest(req) || !isJsonMutationRequest(req)) {") })],
+  ['card_adopter_actor_from_body', 'single_store_contained_mutation', (s) => ({ ...s, [CARD_ADOPTER]: s[CARD_ADOPTER].replace('actor: authority.actor,', 'actor: String((await req.clone().json()).actor ?? authority.actor),') })],
+  ['card_adopter_spreads_body', 'single_store_contained_mutation', (s) => ({ ...s, [CARD_ADOPTER]: s[CARD_ADOPTER].replace('      restriction: parsed.restriction,', '      ...parsed,\n      restriction: parsed.restriction,') })],
+  ['card_adopter_reason_optional', 'single_store_contained_mutation', (s) => ({ ...s, [CARD_ADOPTER]: s[CARD_ADOPTER].replace("  if (reason === '') return null\n", '') })],
+  ['card_adopter_stale_version_accepted', 'single_store_contained_mutation', (s) => ({ ...s, [CARD_ADOPTER]: s[CARD_ADOPTER].replace("currentVersion: result.currentVersion }, 409)", 'currentVersion: result.currentVersion }, 200)') })],
+  ['card_adopter_binds_handler', 'single_store_contained_mutation', (s) => ({ ...s, [CARD_ADOPTER]: `${s[CARD_ADOPTER]}\nimport { createSetContactCommunicationPolicyHandlerV1 } from '@/modules/contacts/public/v1/contact-communication-policy'\n` })],
   ['mutation_exported_publicly', 'single_store_contained_mutation', (s) => ({ ...s, [PUBLIC_INDEX]: `${s[PUBLIC_INDEX]}\nexport { setContactCommunicationPolicyV1 } from '../../application/contact-operations'\n` })],
   ['mutation_factory_exported_publicly', 'single_store_contained_mutation', (s) => ({ ...s, [PUBLIC_INDEX]: s[PUBLIC_INDEX].replace('    createContactCommunicationPermissionQueryHandlerV1,\n', '    createContactCommunicationPermissionQueryHandlerV1,\n    createSetContactCommunicationPolicyHandlerV1,\n') })],
   ['merge_adapter_bypasses_store', 'single_store_contained_mutation', (s) => ({ ...s, [MERGE_ADAPTER]: s[MERGE_ADAPTER].replaceAll('makePrismaContactCommunicationPolicyStoreV1', 'makeLocalStore') })],
@@ -598,7 +655,7 @@ function gitGrep(args) {
 function main() {
   const relatives = [CONTRACTS, CONTRACTS_PROOF, CONTRACTS_INDEX, DOMAIN, DOMAIN_PROOF, ADAPTER, ADAPTER_PROOF, LINEAGE_ADAPTER, LINEAGE_PORT,
     MERGE_HANDLER, MERGE_HANDLER_PROOF, MERGE_ADAPTER, MERGE_ADAPTER_PROOF, RECOVERY_HANDLER, RECOVERY_ADAPTER, RECOVERY_ADAPTER_PROOF,
-    POSTGRES_PROOF, OPERATIONS, PUBLIC_INDEX, MIGRATION, SCHEMA, MANIFEST, REGISTRY, AMENDMENT, POLICY, PENDING]
+    POSTGRES_PROOF, OPERATIONS, PUBLIC_INDEX, MIGRATION, SCHEMA, MANIFEST, REGISTRY, AMENDMENT, POLICY, PENDING, CARD_ADOPTER]
   const sources = Object.fromEntries(relatives.map((relative) => [relative, read(relative)]))
   sources[DELEGATE_WRITERS] = gitGrep(['-E', '\\.contactCommunicationPolicy(Event)?\\.', '--', 'gravity-mvp/src',
     ':(exclude)*.test.ts', ':(exclude)*.test.tsx'])
@@ -632,6 +689,7 @@ function main() {
     'src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.test.ts',
     'src/modules/contacts/internal/legacy-prisma-automated-merge-recovery-adapter.test.ts',
     'src/modules/contacts/public/v1/contact-merge-handler.test.ts',
+    'src/app/api/contacts/[id]/communication-policy/route.test.ts',
     ...(postgresProofEnabled ? ['src/modules/contacts/internal/contact-communication-policy.postgres.test.ts'] : []),
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8' })
   assert.equal(vitest.status, 0, `the contact communication policy proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
@@ -649,7 +707,8 @@ function main() {
     restriction_flags: RESTRICTION_FLAGS.length,
     deny_reasons: REASONS.length - 1,
     policy_store_files: 1,
-    mutation_consumers_outside_contacts: 0,
+    mutation_consumers_outside_contacts: 1,
+    mutation_adopters: [CARD_ADOPTER],
     mutation_exported_publicly: false,
     merge_composition: 'deny_wins',
     recovery: 'event_chain_proof_new_version',
