@@ -32,6 +32,7 @@ const deleteDriverTelegramLink = createDeleteDriverTelegramLinkHandlerV1(legacyP
 const patchDriverTelegramLink = createPatchDriverTelegramLinkHandlerV1(legacyPrismaDriverTelegramPortV1)
 const upsertDriverTelegramLink = createUpsertDriverTelegramLinkHandlerV1(legacyPrismaDriverTelegramPortV1)
 const readDriverTelegramParkLinks = createReadDriverTelegramParkLinksHandlerV1(legacyPrismaDriverTelegramParkLinkReadPortV1)
+const getDriverTelegramLinkStoredStatuses = createGetDriverTelegramLinkStoredStatusesHandlerV1(legacyPrismaDriverTelegramLinkStoredReadPortV1)
 const saveManualDriverTelegramLink = createSaveManualDriverTelegramLinkHandlerV1(legacyPrismaManualDriverTelegramLinkPortV1)
 const removeManualDriverTelegramLink = createRemoveManualDriverTelegramLinkHandlerV1(legacyPrismaManualDriverTelegramLinkPortV1)
 const notifyManualDriverTelegramLink = createNotifyManualDriverTelegramLinkHandlerV1(legacyBotApiManualDriverTelegramLinkNotificationPortV1)
@@ -45,7 +46,7 @@ export const patchDriverTelegramLinkV1 = (...args: Parameters<typeof patchDriver
 export const upsertDriverTelegramLinkV1 = (...args: Parameters<typeof upsertDriverTelegramLink>) => upsertDriverTelegramLink(...args)
 export const readDriverTelegramParkLinksV1 = (...args: Parameters<typeof readDriverTelegramParkLinks>) => readDriverTelegramParkLinks(...args)
 /** DISPLAY-ONLY (telegram.BotLinkStatusQuery.v1): grants nothing; never an access decision. */
-export const getDriverTelegramLinkStoredStatusesV1 = createGetDriverTelegramLinkStoredStatusesHandlerV1(legacyPrismaDriverTelegramLinkStoredReadPortV1)
+export const getDriverTelegramLinkStoredStatusesV1 = (...args: Parameters<typeof getDriverTelegramLinkStoredStatuses>) => getDriverTelegramLinkStoredStatuses(...args)
 export const saveManualDriverTelegramLinkV1 = (...args: Parameters<typeof saveManualDriverTelegramLink>) => saveManualDriverTelegramLink(...args)
 export const removeManualDriverTelegramLinkV1 = (...args: Parameters<typeof removeManualDriverTelegramLink>) => removeManualDriverTelegramLink(...args)
 export const notifyManualDriverTelegramLinkV1 = (...args: Parameters<typeof notifyManualDriverTelegramLink>) => notifyManualDriverTelegramLink(...args)
