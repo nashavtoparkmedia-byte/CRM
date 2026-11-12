@@ -67,6 +67,13 @@ const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const NAME_RULE = /licen[cs]e/iu
 const PERSON_KEY_RULE = /\bexternalPersonKey\b|\bprofileClusterKey\b|\bnormalizedVu\b|\brawVu\b|`vu:\$\{/u
 const CONDUIT_RULE = /\b(?:CashReferralManagerProfileV1|ReferralSearchResponse|ReferralPersonResponse|DriverProfileForContactV2|DriverProfilesByExactLicenceResultV1)\b/u
+// Security 2026-11-12 (G5): an app route, page or action that hands out the
+// answer of a ВУ-returning operation is a reader even when it names no carrier.
+// These are the known operations whose answer carries a ВУ (Fleet's live park
+// search and reconciliation, its contact-profile and exact-licence reads, and
+// the platform-shell compositions over them).
+const APP_FILE = /^gravity-mvp\/src\/app\//u
+const OPERATION_CONDUIT_RULE = /\b(?:searchYandexParksByDriverQueryV1|searchYandexParksByPhonesV1|reconcileYandexFleetWithAutomaticMergeV1|reconcileYandexFleetV1|readDriverProfilesForContactsV[23]|readDriverProfilesByExactLicenceV1|searchPeopleByExactLicenceV1|loadContactPersonCardV1)\b/u
 const DRIVER_READ = /\b(?:prisma|tx|db|transaction|client)\s*\.\s*driver\s*\.\s*(?:findMany|findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow)\s*\(/gu
 const DRIVER_INCLUDE = /\binclude\s*:\s*\{[^}]*\b(?:driver|drivers|driverProfiles|mainDriver|contactProfile)\s*:\s*true\b/u
 
@@ -95,10 +102,11 @@ export function stripComments(text) {
   return out
 }
 
-/** The rules a source text matches (comments stripped). */
-export function licenceReaderRules(source) {
+/** The rules a source text matches (comments stripped); `file` lets an app file count an operation conduit. */
+export function licenceReaderRules(source, file = '') {
   const text = stripComments(source)
   const rules = []
+  if (APP_FILE.test(file) && OPERATION_CONDUIT_RULE.test(text)) rules.push('operation_conduit')
   if (NAME_RULE.test(text)) rules.push('name')
   if (PERSON_KEY_RULE.test(text)) rules.push('person_key')
   if (CONDUIT_RULE.test(text)) rules.push('conduit')
@@ -158,6 +166,7 @@ export const LICENCE_READERS = {
   [`${P}app/api/monitoring/drivers/[id]/attention/route.ts`]: { disposition: 'owner_internal', note: 'mobile-session write; reads the Driver row, returns only the attention id and status' },
   [`${P}app/api/monitoring/drivers/[id]/event/route.ts`]: { disposition: 'owner_internal', note: 'mobile-session write; returns only the event id and type' },
   [`${P}app/api/monitoring/drivers/[id]/fleet-check/route.ts`]: { disposition: 'd2l', owner: fleet },
+  [`${P}app/api/monitoring/fleet-check/driver-person/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'the «Привязать профиль Яндекс» live park search (it upserts Driver rows) and its confirmation follow-up; both handlers admit only the integration-admin session (Security 2026-11-12, Option B) until both move with the confirm POST to Contacts\' write authority' },
   [`${P}app/api/monitoring/drivers/route.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/api/monitoring/fleet-check/callback/route.ts`]: { disposition: 'owner_internal', note: 'scraper callback; reads the Driver row, returns only ok and the status' },
   [`${P}app/api/webhooks/bot/route.ts`]: { disposition: 'owner_internal', note: 'bot webhook compares the person key to find a driver\'s parks; it returns no key' },
@@ -166,6 +175,7 @@ export const LICENCE_READERS = {
   [`${P}app/compensation/referrals/referral-data.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}app/compensation/referrals/view.ts`]: { disposition: 'admin_only', becomes: 'masked', gate: 'getIntegrationAdminPrincipal', gateFile: `${P}app/compensation/referrals/page.tsx`, note: 'D2: masked after #214' },
   [`${P}app/contacts/LicenceSearchClient.tsx`]: { disposition: 'masked', gateFile: `${P}modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler.ts`, note: 'renders the ВУ search answer as the server masked it' },
+  [`${P}app/contacts/[id]/page.tsx`]: { disposition: 'masked', gateFile: `${P}modules/fleet-operations/public/v1/driver-profiles-for-contacts-v2-handler.ts`, note: 'hands the card composition\'s answer to PersonCardView; Contacts\' read authority decides inside the composition and Fleet masks for its view' },
   [`${P}app/contacts/[id]/PersonCardView.tsx`]: { disposition: 'masked', gateFile: `${P}modules/fleet-operations/public/v1/driver-profiles-for-contacts-v2-handler.ts`, note: 'renders the profile ВУ as Fleet masked it for the reader\'s view' },
   [`${P}app/contacts/page.tsx`]: { disposition: 'licence_term_only', note: 'names the ВУ search component; carries no number' },
   [`${P}app/drivers/actions.ts`]: { disposition: 'd2l', owner: fleet },
@@ -303,7 +313,7 @@ const DISPOSITIONS = new Set(['read_authority', 'owner_internal', 'evidence_key'
 export function discoverLicenceReaders(files, readFile) {
   return files
     .filter((file) => CODE_FILE.test(file) && !TEST_FILE.test(file))
-    .filter((file) => licenceReaderRules(readFile(file)).length > 0)
+    .filter((file) => licenceReaderRules(readFile(file), file).length > 0)
     .sort()
 }
 
@@ -370,6 +380,10 @@ function runNegativeProbes() {
     ['comment only is not a reader', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/c.ts': '// licenseNumber is never read here\nconst y = 1' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, null],
     ['selected Driver read is not a row', { 'a/reader.ts': 'const x = driver.licenseNumber', 'a/s.ts': 'prisma.driver.findMany({ select: { id: true } })' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, null],
     ['d2l without owner', base, { 'a/reader.ts': { disposition: 'd2l' } }, /d2l entry without an owner/u],
+    // G5: an app route that hands out a ВУ-returning operation's answer is a reader, and its GET must be gated.
+    ['app route forwarding the park search', { ...base, 'gravity-mvp/src/app/api/x/route.ts': 'export async function GET(req: Request) { return Response.json(await searchYandexParksByDriverQueryV1(new URL(req.url).searchParams.get(\'q\'))) }' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, /unlisted ВУ reader: gravity-mvp\/src\/app\/api\/x\/route\.ts/u],
+    ['forwarding route listed admin_only, GET ungated', { 'a/reader.ts': 'const x = driver.licenseNumber', 'gravity-mvp/src/app/api/x/route.ts': 'export async function GET(req: Request) { const q = new URL(req.url).searchParams.get(\'q\'); return Response.json(await searchYandexParksByDriverQueryV1(q)) }\nexport async function POST(req: Request) { if (!await getIntegrationAdminPrincipal()) return null; return 1 }' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' }, 'gravity-mvp/src/app/api/x/route.ts': { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal' } }, /the guard is missing in GET in gravity-mvp\/src\/app\/api\/x\/route\.ts/u],
+    ['the operation outside app is not a conduit by itself', { 'a/reader.ts': 'const x = driver.licenseNumber', 'gravity-mvp/src/modules/x/y.ts': 'export { searchYandexParksByDriverQueryV1 } from \'./z\'' }, { 'a/reader.ts': { disposition: 'd2l', owner: 'x' } }, null],
   ]
   for (const [name, files, inventory, expected] of probes) {
     const readFile = reader(files)

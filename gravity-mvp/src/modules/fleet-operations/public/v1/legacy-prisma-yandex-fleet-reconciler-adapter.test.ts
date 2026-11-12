@@ -460,6 +460,17 @@ describe('a nightly read of a park paces itself and survives Yandex throttling',
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  // Security 2026-11-12 (G2), the operator search's bound: a text query asks each
+  // park exactly once, one page of at most 100, however many profiles the park has.
+  test('a text query reads exactly one page of at most 100 per park, even when the park has more', async () => {
+    fetchMock.mockResolvedValue(page(0, 100, 5000))
+    const observations = await fetchParkProfiles(connection, 'Петров')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect([body.limit, body.offset, body.query.text]).toEqual([100, 0, 'Петров'])
+    expect(observations.length).toBeLessThanOrEqual(100)
+  })
+
   test('a searched read is interactive and still reports a 429 at once', async () => {
     fetchMock.mockResolvedValue(throttled('30'))
     await expect(fetchParkProfiles(connection, 'Петров')).rejects.toMatchObject({
