@@ -166,7 +166,7 @@ export const LICENCE_READERS = {
   [`${P}app/api/monitoring/drivers/[id]/attention/route.ts`]: { disposition: 'owner_internal', note: 'mobile-session write; reads the Driver row, returns only the attention id and status' },
   [`${P}app/api/monitoring/drivers/[id]/event/route.ts`]: { disposition: 'owner_internal', note: 'mobile-session write; returns only the event id and type' },
   [`${P}app/api/monitoring/drivers/[id]/fleet-check/route.ts`]: { disposition: 'd2l', owner: fleet },
-  [`${P}app/api/monitoring/fleet-check/driver-person/route.ts`]: { disposition: 'admin_only', gate: 'getIntegrationAdminPrincipal', note: 'the «Привязать профиль Яндекс» live park search (it upserts Driver rows) and its confirmation follow-up; both handlers admit only the integration-admin session (Security 2026-11-12, Option B) until both move with the confirm POST to Contacts\' write authority' },
+  [`${P}app/api/monitoring/fleet-check/driver-person/route.ts`]: { disposition: 'read_authority', note: 'the «Привязать профиль Яндекс» live park search (it upserts Driver rows): GET asks Contacts\' write authority like its confirm (Security Option B, V2-B); the confirmation follow-up POST stays integration-admin' },
   [`${P}app/api/monitoring/drivers/route.ts`]: { disposition: 'd2l', owner: fleet },
   [`${P}app/api/monitoring/fleet-check/callback/route.ts`]: { disposition: 'owner_internal', note: 'scraper callback; reads the Driver row, returns only ok and the status' },
   [`${P}app/api/webhooks/bot/route.ts`]: { disposition: 'owner_internal', note: 'bot webhook compares the person key to find a driver\'s parks; it returns no key' },

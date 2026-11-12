@@ -13,6 +13,15 @@ vi.mock('@/modules/fleet-operations/public/v1', () => ({
 vi.mock('@/modules/platform-shell/public/v1', () => ({
   reconcileYandexFleetWithAutomaticMergeV1: mocks.reconcile,
 }))
+// V2-B: the search asks Contacts' write authority; this derives it from the same principal spy.
+vi.mock('@/modules/contacts/public/v1', () => ({
+  resolveContactWriteAuthorityV1: async () => {
+    const signed = await mocks.principal()
+    return signed
+      ? { decision: 'allow', principal: { kind: signed.kind }, actor: signed.id, policyVersion: 'contacts.write-authority.v1' }
+      : { decision: 'deny', reason: 'no_session' }
+  },
+}))
 vi.mock('@/modules/identity-access/public/v1', async importOriginal => ({
   ...await importOriginal<typeof import('@/modules/identity-access/public/v1')>(),
   getIntegrationAdminPrincipal: mocks.principal,
@@ -124,7 +133,14 @@ describe('GET driver-person search: who may run it and how much', () => {
     return new NextRequest(`${ROUTE}?query=${encodeURIComponent(query)}`, { method: 'GET', headers })
   }
 
-  test('without the integration-admin session nobody searches: no session, crm_user_id, a staff or a mobile cookie alone -> 401, zero Fleet calls', async () => {
+  test('an employee\'s own session searches, throttled under its own actor', async () => {
+    const run = await freshGET()
+    mocks.principal.mockResolvedValue({ id: 'staff:u1', kind: 'staff_session' })
+    expect((await run(search('Иванов Сергей'))).status).toBe(200)
+    expect(mocks.search).toHaveBeenCalledTimes(1)
+  })
+
+  test('without a Contacts writer nobody searches: no session, crm_user_id, a staff or a mobile cookie alone -> 401, zero Fleet calls', async () => {
     const run = await freshGET()
     mocks.principal.mockResolvedValue(null)
     for (const cookie of [undefined, 'crm_user_id=u1', 'yoko_staff_session=token', 'yoko_mobile_session=token']) {
