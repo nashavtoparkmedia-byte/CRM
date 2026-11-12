@@ -10,7 +10,7 @@ import { createContactLicenceSearchCompositionV1 } from './contact-licence-searc
 
 const TYPED = '99 12 345678'
 
-function allow(licenceView: 'full' | 'last4'): ContactReadAuthorityV1 {
+function allow(licenceView: 'full' | 'last4'): Extract<ContactReadAuthorityV1, { decision: 'allow' }> {
   return { decision: 'allow', principal: { kind: 'staff_session', userId: 'u1', role: licenceView === 'full' ? 'Администратор' : 'Менеджер' }, licenceView, policyVersion: 'contacts.read-authority.v1' }
 }
 
