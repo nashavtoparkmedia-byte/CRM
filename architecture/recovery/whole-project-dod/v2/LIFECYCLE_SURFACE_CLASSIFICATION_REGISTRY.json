@@ -4,9 +4,9 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 750,
+    "total_entries": 749,
     "test": 39,
-    "dead_historical": 92,
+    "dead_historical": 91,
     "migration_only": 91,
     "active_operational": 523,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
@@ -3817,16 +3817,6 @@
       "production_capability": "POSSIBLE",
       "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
-    },
-    {
-      "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-      "lifecycle": "DEAD_HISTORICAL",
-      "disposition": "DEAD_HISTORICAL",
-      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
-      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json",
-      "source_sha256": "1ba1cbfd63e754d63af5f9ba131641d7f8b4a225da2701173bf37c5810f4c676",
-      "production_capability": "NONE",
       "functional_owner": "gravity_application_operations"
     },
     {

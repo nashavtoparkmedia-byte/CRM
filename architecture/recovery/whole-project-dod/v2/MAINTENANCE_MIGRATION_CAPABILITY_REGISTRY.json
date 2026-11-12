@@ -6,10 +6,10 @@
     "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003"
   },
   "summary": {
-    "source_records": 264,
-    "preliminary_units": 188,
+    "source_records": 257,
+    "preliminary_units": 184,
     "approved": 0,
-    "pending_evidence": 187,
+    "pending_evidence": 183,
     "remediated_pending_rescan": 1
   },
   "policy": "No file, directory, script family, owner, or model is broadly approved. Every active capability must match exact source, site, owner, target and operation.",
@@ -3263,58 +3263,6 @@
       }
     },
     {
-      "capability_id": "mmc.v1.fleet_operations.831fb0afbb58ff08",
-      "status": "PENDING_EVIDENCE",
-      "approved": false,
-      "source": {
-        "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "entrypoint": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "site_signatures": [
-          "25f2eabf7a05c786d56bdfbf567c852340e0d02a0ba1c176aeeb05039cc619d7",
-          "59ca0f72871e7820528046746450325fcc7e1094222e07f47e6f58ab24fad48f"
-        ]
-      },
-      "lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
-      "lifecycle_evidence_status": "PENDING_ENTRYPOINT_REACHABILITY_REVIEW",
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "exact_names": [
-          "driverAction"
-        ],
-        "operations": [
-          "deleteMany"
-        ]
-      },
-      "execution": {
-        "mechanism": "DIRECT_DATABASE_CALL_IN_FROZEN_SOURCE",
-        "owner_controlled_adapter_required": true
-      },
-      "invocation": {
-        "production_reachability": "UNKNOWN",
-        "current_caller": null
-      },
-      "recurring": false,
-      "cross_domain": false,
-      "architecture_path": "operational caller -> fleet_operations owner-controlled maintenance/migration capability -> exact target operation",
-      "retirement_condition": "remove from active executable inventory after evidenced completion",
-      "enforcement": {
-        "match": [
-          "source.path",
-          "site_signature",
-          "target.data_owner",
-          "target.exact_names",
-          "target.operations"
-        ],
-        "unrelated_model_write_must_fail": true,
-        "unrelated_destructive_operation_must_fail": true
-      },
-      "baseline": {
-        "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
-        "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003"
-      }
-    },
-    {
       "capability_id": "mmc.v1.fleet_operations.8cb068c4638ae458",
       "status": "PENDING_EVIDENCE",
       "approved": false,
@@ -3349,57 +3297,6 @@
       "cross_domain": false,
       "architecture_path": "operational caller -> fleet_operations owner-controlled maintenance/migration capability -> exact target operation",
       "retirement_condition": null,
-      "enforcement": {
-        "match": [
-          "source.path",
-          "site_signature",
-          "target.data_owner",
-          "target.exact_names",
-          "target.operations"
-        ],
-        "unrelated_model_write_must_fail": true,
-        "unrelated_destructive_operation_must_fail": true
-      },
-      "baseline": {
-        "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
-        "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003"
-      }
-    },
-    {
-      "capability_id": "mmc.v1.fleet_operations.949ee103158f7f33",
-      "status": "PENDING_EVIDENCE",
-      "approved": false,
-      "source": {
-        "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "entrypoint": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "site_signatures": [
-          "ed146ee063421a11d62fcee95f7ef3e6c79c55e8f2ab6a0108c39d52270a8e33"
-        ]
-      },
-      "lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
-      "lifecycle_evidence_status": "PENDING_ENTRYPOINT_REACHABILITY_REVIEW",
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "exact_names": [
-          "driver"
-        ],
-        "operations": [
-          "upsert"
-        ]
-      },
-      "execution": {
-        "mechanism": "DIRECT_DATABASE_CALL_IN_FROZEN_SOURCE",
-        "owner_controlled_adapter_required": true
-      },
-      "invocation": {
-        "production_reachability": "UNKNOWN",
-        "current_caller": null
-      },
-      "recurring": false,
-      "cross_domain": false,
-      "architecture_path": "operational caller -> fleet_operations owner-controlled maintenance/migration capability -> exact target operation",
-      "retirement_condition": "remove from active executable inventory after evidenced completion",
       "enforcement": {
         "match": [
           "source.path",
@@ -3655,58 +3552,6 @@
       "cross_domain": false,
       "architecture_path": "operational caller -> fleet_operations owner-controlled maintenance/migration capability -> exact target operation",
       "retirement_condition": null,
-      "enforcement": {
-        "match": [
-          "source.path",
-          "site_signature",
-          "target.data_owner",
-          "target.exact_names",
-          "target.operations"
-        ],
-        "unrelated_model_write_must_fail": true,
-        "unrelated_destructive_operation_must_fail": true
-      },
-      "baseline": {
-        "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
-        "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003"
-      }
-    },
-    {
-      "capability_id": "mmc.v1.fleet_operations.fb4643f95637d22d",
-      "status": "PENDING_EVIDENCE",
-      "approved": false,
-      "source": {
-        "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "entrypoint": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "site_signatures": [
-          "87228fc7fc26bc468207dc65822f955fc257da32732b4fee3297064d843f9a48",
-          "b35c2e9503d39d243f735cff1dc0165d215fed1096123fa1165fec8ffb19fa7d"
-        ]
-      },
-      "lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
-      "lifecycle_evidence_status": "PENDING_ENTRYPOINT_REACHABILITY_REVIEW",
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "exact_names": [
-          "driver"
-        ],
-        "operations": [
-          "delete"
-        ]
-      },
-      "execution": {
-        "mechanism": "DIRECT_DATABASE_CALL_IN_FROZEN_SOURCE",
-        "owner_controlled_adapter_required": true
-      },
-      "invocation": {
-        "production_reachability": "UNKNOWN",
-        "current_caller": null
-      },
-      "recurring": false,
-      "cross_domain": false,
-      "architecture_path": "operational caller -> fleet_operations owner-controlled maintenance/migration capability -> exact target operation",
-      "retirement_condition": "remove from active executable inventory after evidenced completion",
       "enforcement": {
         "match": [
           "source.path",
@@ -7975,58 +7820,6 @@
       "cross_domain": false,
       "architecture_path": "operational caller -> operations_observability owner-controlled maintenance/migration capability -> exact target operation",
       "retirement_condition": null,
-      "enforcement": {
-        "match": [
-          "source.path",
-          "site_signature",
-          "target.data_owner",
-          "target.exact_names",
-          "target.operations"
-        ],
-        "unrelated_model_write_must_fail": true,
-        "unrelated_destructive_operation_must_fail": true
-      },
-      "baseline": {
-        "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
-        "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003"
-      }
-    },
-    {
-      "capability_id": "mmc.v1.telegram_channel.d3512bdf37225682",
-      "status": "PENDING_EVIDENCE",
-      "approved": false,
-      "source": {
-        "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "entrypoint": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "site_signatures": [
-          "0279bd80352108258a83db88b2032f8ff6bdfd0cfdd70118ee9966be5485b67b",
-          "1263505026add0a565ad199461de1cfa48c52e45a299a0a1798c0fe317d697e8"
-        ]
-      },
-      "lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
-      "lifecycle_evidence_status": "PENDING_ENTRYPOINT_REACHABILITY_REVIEW",
-      "functional_owner": "telegram_channel",
-      "target": {
-        "data_owner": "telegram_channel",
-        "exact_names": [
-          "driverTelegram"
-        ],
-        "operations": [
-          "updateMany"
-        ]
-      },
-      "execution": {
-        "mechanism": "DIRECT_DATABASE_CALL_IN_FROZEN_SOURCE",
-        "owner_controlled_adapter_required": true
-      },
-      "invocation": {
-        "production_reachability": "UNKNOWN",
-        "current_caller": null
-      },
-      "recurring": false,
-      "cross_domain": false,
-      "architecture_path": "operational caller -> telegram_channel owner-controlled maintenance/migration capability -> exact target operation",
-      "retirement_condition": "remove from active executable inventory after evidenced completion",
       "enforcement": {
         "match": [
           "source.path",
