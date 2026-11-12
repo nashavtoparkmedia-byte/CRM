@@ -2016,9 +2016,9 @@
     {
       "record_id": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
       "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
-      "source_sha256": "fe465ebc9a96d56e00cf34a5265466f388186763c4a9f6da12d250faf7aa1360",
+      "source_sha256": "4daae70d4b5e0638c938ea08922700f40fac281c831b05045ee204a22144d717",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line": 2766,
+      "line": 2872,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -2045,7 +2045,7 @@
         "min"
       ],
       "sql_sha256": "50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
-      "sql_provenance_sha256": "9fecb0c2185ca3909fbc48a9e9214a1ed54e8ab2d86b81723b98aa0659c89193",
+      "sql_provenance_sha256": "9b19be08b79f13ad5849bed38811f82e9558e5fc40c5c3f54884fcb77e280a42",
       "source_context": "whatsapp_channel",
       "source_technical_module": "whatsapp_provider",
       "owner_contexts": [],
@@ -4991,11 +4991,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-        "line": 2766,
+        "line": 2872,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "fe465ebc9a96d56e00cf34a5265466f388186763c4a9f6da12d250faf7aa1360",
-        "sql_provenance_sha256": "9fecb0c2185ca3909fbc48a9e9214a1ed54e8ab2d86b81723b98aa0659c89193"
+        "source_sha256": "4daae70d4b5e0638c938ea08922700f40fac281c831b05045ee204a22144d717",
+        "sql_provenance_sha256": "9b19be08b79f13ad5849bed38811f82e9558e5fc40c5c3f54884fcb77e280a42"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -5018,12 +5018,12 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2766:32",
+        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2872:32",
         "analysis_site_signature:490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
         "sql_sha256:50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:fe465ebc9a96d56e00cf34a5265466f388186763c4a9f6da12d250faf7aa1360",
-        "sql_provenance_sha256:9fecb0c2185ca3909fbc48a9e9214a1ed54e8ab2d86b81723b98aa0659c89193"
+        "source_sha256:4daae70d4b5e0638c938ea08922700f40fac281c831b05045ee204a22144d717",
+        "sql_provenance_sha256:9b19be08b79f13ad5849bed38811f82e9558e5fc40c5c3f54884fcb77e280a42"
       ]
     },
     {
