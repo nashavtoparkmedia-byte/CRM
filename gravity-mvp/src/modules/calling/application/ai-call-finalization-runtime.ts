@@ -19,6 +19,11 @@ import { appendAiCallTranscriptMessage } from './ai-call-callback-runtime'
 
 const persistEvents = _createPersistEvents()
 
+function isSimulatedCallMetadata(metadata: unknown): boolean {
+    return typeof metadata === 'object' && metadata !== null && !Array.isArray(metadata)
+        && (metadata as Record<string, unknown>).simulated === true
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, tag: string): Promise<T> {
     let timer: NodeJS.Timeout | undefined
     const deadline = new Promise<never>((_, reject) => {
@@ -106,7 +111,11 @@ const finalizeAiCallOperation = createAiCallFinalizationOperation({
                 issues: eventsResult.issues.slice(0, 5),
             })
 
-            if (!terminal.aiAnalysis && call.transcript?.trim()) {
+            // A simulated call (campaign proof or C4 manual simulation) never asks a provider to
+            // analyse it: the transcript is scripted, and the enqueue would be a provider effect.
+            if (!terminal.aiAnalysis && call.transcript?.trim() && isSimulatedCallMetadata(call.metadata)) {
+                opsLog('info', 'ai_call_analyze_skipped_simulation', { callId: call.id })
+            } else if (!terminal.aiAnalysis && call.transcript?.trim()) {
                 try {
                     await withTimeout(enqueueAnalyze(call.id), 2_000, 'enqueueAnalyze')
                     opsLog('info', 'ai_call_analyze_enqueued_on_finalize', {
