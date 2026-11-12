@@ -84,6 +84,7 @@ const { resolveContactWriteAuthorityFromIdentityAccessV1: resolveWriter } = awai
 const { MOBILE_SESSION_COOKIE } = await import('@/modules/identity-access/public/v1/mobile-session-credentials')
 const { NextRequest } = await import('next/server')
 const { proxy, config } = await import('@/proxy')
+const { GET: contactGet } = await import('@/app/api/contacts/[id]/route')
 
 const STAFF_COOKIE = '__Host-yoko_staff_session'
 const SECRET = 'staff-session-signing-key-for-tests-0123456789abcdef'
@@ -227,5 +228,22 @@ describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', () => 
     writeRegistry([{ ...MANAGER, status: 'Отключен' }, ADMIN])
     asRequest({ [STAFF_COOKIE]: token })
     await expect(resolveWriter()).resolves.toEqual({ decision: 'deny', reason: 'staff_session_refused' })
+  })
+
+  test('GET /api/contacts/:id answers a request without a verified session with 401 and no person bytes', async () => {
+    configureAdmin()
+    const cases: Array<[string, Record<string, string>]> = [
+      ['only crm_user_id', { crm_user_id: 'u2' }],
+      ['a staff cookie on a lane without a secret', { [STAFF_COOKIE]: 'any.token', crm_user_id: 'u2' }],
+      ['nothing', {}],
+    ]
+    for (const [name, cookies] of cases) {
+      asRequest(cookies)
+      const response = await contactGet(new NextRequest('https://yokoone.ru/api/contacts/ci-demo-contact-gromov'), { params: Promise.resolve({ id: 'ci-demo-contact-gromov' }) })
+      const body = await response.text()
+      expect(response.status, name).toBe(401)
+      expect(response.headers.get('cache-control'), name).toBe('no-store')
+      expect(body, name).toBe('{"error":"Unauthorized"}')
+    }
   })
 })

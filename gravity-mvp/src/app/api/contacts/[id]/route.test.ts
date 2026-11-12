@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   contactUpdate: vi.fn(),
   patchContact: vi.fn(),
   principal: vi.fn(),
+  readAuthority: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
@@ -25,7 +26,7 @@ vi.mock('@/modules/contacts/public/v1', () => ({ resolveContactWriteAuthorityV1:
     return signed
       ? { decision: 'allow', principal: { kind: 'integration_admin_session', transitional: true }, actor: signed.id, policyVersion: 'contacts.write-authority.v1' }
       : { decision: 'deny', reason: 'no_session' }
-  }, resolveContactLineageV1: mocks.lineage }))
+  }, resolveContactLineageV1: mocks.lineage, resolveContactReadAuthorityV1: mocks.readAuthority }))
 vi.mock('@/modules/identity-access/public/v1', async importOriginal => ({
   ...await importOriginal<typeof import('@/modules/identity-access/public/v1')>(),
   getIntegrationAdminPrincipal: mocks.principal,
@@ -83,6 +84,12 @@ function driver(id: string, parkId: string, profileId: string) {
 describe('Contact evidence GET', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.readAuthority.mockResolvedValue({
+      decision: 'allow',
+      principal: { kind: 'staff_session', userId: 'u1', role: 'Менеджер' },
+      licenceView: 'full',
+      policyVersion: 'contacts.read-authority.v1',
+    })
     mocks.summary.mockReturnValue({ displayTitle: 'Иванов Иван' })
     mocks.lineage.mockResolvedValue({ contactIds: ['contact-1', 'merged-contact'] })
     mocks.driverFindMany.mockResolvedValue([driver('driver-b', 'park-b', 'profile-b')])
@@ -223,3 +230,24 @@ describe('Contact evidence GET', () => {
     })
   })
 })
+
+describe('GET /api/contacts/:id under Contacts\' read authority (Security 2026-11-12)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  test('answers every denial with 401, no data and no-store, before any read', async () => {
+    for (const reason of ['no_session', 'staff_session_refused', 'transitional_admin_read_disabled']) {
+      mocks.readAuthority.mockResolvedValueOnce({ decision: 'deny', reason })
+      const { GET } = await import('./route')
+      const response = await GET(new NextRequest('http://localhost/api/contacts/contact-1', { headers: { cookie: 'crm_user_id=u2' } }), { params: Promise.resolve({ id: 'contact-1' }) })
+      expect(response.status, reason).toBe(401)
+      expect(response.headers.get('cache-control')).toBe('no-store')
+      expect(await response.text()).toBe('{"error":"Unauthorized"}')
+    }
+    expect(mocks.contactFindUnique).not.toHaveBeenCalled()
+    expect(mocks.driverFindMany).not.toHaveBeenCalled()
+    expect(mocks.lineage).not.toHaveBeenCalled()
+  })
+})
+

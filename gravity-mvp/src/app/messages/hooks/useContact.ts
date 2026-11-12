@@ -168,6 +168,9 @@ export function useContact(contactId: string | null | undefined) {
     const [contact, setContact] = useState<Contact | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // True when /api/contacts/:id refused the request (401): no verified staff
+    // or integration-admin session. Not retried; the panel asks to sign in.
+    const [unauthorized, setUnauthorized] = useState(false)
     const abortRef = useRef<AbortController | null>(null)
 
     useEffect(() => {
@@ -175,6 +178,7 @@ export function useContact(contactId: string | null | undefined) {
             setContact(null)
             setIsLoading(false)
             setError(null)
+            setUnauthorized(false)
             return
         }
 
@@ -184,11 +188,19 @@ export function useContact(contactId: string | null | undefined) {
 
         setIsLoading(true)
         setError(null)
+        setUnauthorized(false)
 
         fetch(`/api/contacts/${contactId}`, { signal: controller.signal })
             .then(res => {
                 if (res.status === 404) {
                     setContact(null)
+                    return null
+                }
+                if (res.status === 401) {
+                    if (!controller.signal.aborted) {
+                        setContact(null)
+                        setUnauthorized(true)
+                    }
                     return null
                 }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -197,6 +209,7 @@ export function useContact(contactId: string | null | undefined) {
             .then(data => {
                 if (!controller.signal.aborted && data) {
                     setContact(data)
+                    setUnauthorized(false)
                 }
             })
             .catch(err => {
@@ -228,11 +241,21 @@ export function useContact(contactId: string | null | undefined) {
 
         fetch(`/api/contacts/${contactId}`, { signal: controller.signal })
             .then(res => {
+                if (res.status === 401) {
+                    if (!controller.signal.aborted) {
+                        setContact(null)
+                        setUnauthorized(true)
+                    }
+                    return null
+                }
                 if (!res.ok) throw new Error(`HTTP ${res.status}`)
                 return res.json()
             })
             .then(data => {
-                if (!controller.signal.aborted) setContact(data)
+                if (!controller.signal.aborted && data) {
+                    setContact(data)
+                    setUnauthorized(false)
+                }
             })
             .catch(err => {
                 if (err.name !== 'AbortError') {
@@ -244,5 +267,5 @@ export function useContact(contactId: string | null | undefined) {
             })
     }, [contactId])
 
-    return { contact, isLoading, error, refetch }
+    return { contact, isLoading, error, unauthorized, refetch }
 }

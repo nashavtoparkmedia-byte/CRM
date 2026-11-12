@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 import { ContactService } from '@/lib/ContactService'
-import { resolveContactLineageV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
+import { resolveContactLineageV1, resolveContactReadAuthorityV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import type { Prisma } from '@prisma/client'
 import {
   contactAutomationState,
@@ -48,16 +48,30 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** Every GET answer names a person or says why not: none may be cached. */
+const NO_STORE = { 'Cache-Control': 'no-store' }
+
 /**
  * GET /api/contacts/:id
  *
  * Полная карточка контакта: phones, identities, chats, driver, mergeHistory.
  * Spec: unified-contact-spec.md v1.1 §12.2 (API contracts)
+ *
+ * It answers only under Contacts' read authority (ContactReadAuthorityQuery.v1:
+ * a verified Staff Session employee or, transitionally, the integration-admin
+ * session), asked before anything is read. The answer carries people's phones,
+ * accounts and ВУ history, so a request without one of those sessions —
+ * including one that only carries crm_user_id — gets 401 and no data
+ * (Security, 2026-11-12).
  */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authority = await resolveContactReadAuthorityV1()
+  if (authority.decision !== 'allow') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })
+  }
   try {
     const { id } = await params
 
@@ -144,7 +158,7 @@ export async function GET(
     })
 
     if (!contact) {
-      return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404, headers: NO_STORE })
     }
     if (contact.isArchived) {
       const survivorId = contactAutomationState(contact.customFields).mergedIntoContactId
@@ -152,7 +166,7 @@ export async function GET(
       if (survivorId) {
         return NextResponse.redirect(new URL(`/api/contacts/${survivorId}`, req.url), 308)
       }
-      return NextResponse.json({ error: 'Contact archived', redirectContactId: null }, { status: 410 })
+      return NextResponse.json({ error: 'Contact archived', redirectContactId: null }, { status: 410, headers: NO_STORE })
     }
 
     const lineage = await resolveContactLineageV1(contact.id)
@@ -269,10 +283,10 @@ export async function GET(
         currentChannel: contact.chats[0]?.channel || null,
       }),
       mergeHistory,
-    })
+    }, { headers: NO_STORE })
   } catch (err: unknown) {
     console.error('[contacts/:id] GET Error:', errorMessage(err))
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500, headers: NO_STORE })
   }
 }
 
