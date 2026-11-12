@@ -33,7 +33,7 @@ const FEED = 'gravity-mvp/src/modules/contacts/internal/identity-access-contact-
 const APPLICATION = 'gravity-mvp/src/modules/contacts/application/contact-operations.ts'
 const MANIFEST = 'architecture/contexts/v1/manifests/contacts.json'
 const CONTROL = 'node tools/architecture/check-contact-write-authority-boundary.mjs'
-const ROUTE_ROOTS = ['gravity-mvp/src/app/api/contacts', 'gravity-mvp/src/app/api/contact-merges']
+const ROUTE_ROOTS = ['gravity-mvp/src/app/api/contacts', 'gravity-mvp/src/app/api/contact-merges', 'gravity-mvp/src/app/contacts']
 const API = 'gravity-mvp/src/app/api'
 /** Every mutating Contacts route, each gated by the write authority. */
 const WRITE_ROUTES = [
@@ -47,7 +47,11 @@ const WRITE_ROUTES = [
   `${API}/contacts/[id]/phones/[phoneId]/route.ts`,
   `${API}/contacts/[id]/phones/route.ts`,
   `${API}/contacts/[id]/route.ts`,
+  // «Проверить» (W5) sits beside the card page: Contacts may not import Messaging.
+  'gravity-mvp/src/app/contacts/[id]/reachability/route.ts',
 ]
+/** POST routes that only read, under Contacts' read authority (the ВУ search; pinned by the person-card control). */
+const READ_POST_ROUTES = ['gravity-mvp/src/app/contacts/licence-search/route.ts']
 /** Mutating routes that write nothing; each is pinned to its inert shape below. */
 const INERT_MERGE_ROUTE = `${API}/contacts/[id]/merge/route.ts`
 const INERT_START_ROUTE = `${API}/contacts/start-conversation/route.ts`
@@ -165,7 +169,12 @@ function assertFeed(read = readRepo) {
 /** 3. Every mutating Contacts route asks the authority first and records only its actor. */
 function assertRoutes(read = readRepo, discovered = routeFiles()) {
   const mutating = discovered.filter((file) => mutatingHandlers(withoutComments(read(file))).length > 0)
-  assert.deepEqual(mutating, [...WRITE_ROUTES, INERT_MERGE_ROUTE, INERT_START_ROUTE].sort(), 'the mutating Contacts routes changed; gate the new one with the write authority')
+  assert.deepEqual(mutating, [...WRITE_ROUTES, ...READ_POST_ROUTES, INERT_MERGE_ROUTE, INERT_START_ROUTE].sort(), 'the mutating Contacts routes changed; gate the new one with the write authority')
+  for (const file of READ_POST_ROUTES) {
+    const source = withoutComments(read(file))
+    // Its composition asks Contacts' read authority first (pinned by check-contact-person-card-read-model-boundary).
+    assert(source.includes('await searchPeopleByExactLicenceV1(') && !/\.(create|update|upsert|delete)\w*\(|\$executeRaw|setContactCommunicationPolicyV1|resolveContactWriteAuthorityV1/u.test(source), `${file} is no longer only the ВУ search read`)
+  }
   for (const file of WRITE_ROUTES) {
     const source = withoutComments(read(file))
     assert(source.includes("import { resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'") || /import \{[^}]*\bresolveContactWriteAuthorityV1\b[^}]*\} from '@\/modules\/contacts\/public\/v1'/u.test(source), `${file} does not take the write authority from Contacts' public surface`)
@@ -233,6 +242,8 @@ const MUTANTS = [
   [DECISION, 'actor: `staff:${staff.userId}`,', 'actor: CONTACT_TRANSITIONAL_ADMIN_ACTOR_V1,'],
   [DECISION, "principal: { kind: 'integration_admin_session', transitional: true },", "principal: { kind: 'integration_admin_session' } as never,"],
   [DECISION, "if (inputs.integrationAdminVerified !== true) return deny('no_session')", ''],
+  // «Проверить» taking a number from the request (W5).
+  ['gravity-mvp/src/app/contacts/[id]/reachability/route.ts', 'const authority = await resolveContactWriteAuthorityV1()', "const phone = (await req.clone().json()).phone\n  void phone\n  const authority = await resolveContactWriteAuthorityV1()"],
   // The binding swapped.
   [APPLICATION, 'export const resolveContactWriteAuthorityV1 = () => resolveContactWriteAuthorityFromIdentityAccessV1()', "export const resolveContactWriteAuthorityV1 = async () => ({ decision: 'allow', actor: 'identity-access:integration-admin-session' }) as never"],
 ]
@@ -276,6 +287,7 @@ function runProofs() {
     'src/modules/contacts/public/v1/contact-write-authority.test.ts',
     'src/modules/contacts/internal/identity-access-contact-read-authority.staff-session.test.ts',
     ...WRITE_ROUTES.map((file) => file.replace('gravity-mvp/', '').replace(/route\.ts$/u, 'route.test.ts')),
+    'src/modules/contacts/internal/legacy-prisma-contact-reachability-target-adapter.test.ts',
     INERT_MERGE_ROUTE.replace('gravity-mvp/', '').replace(/route\.ts$/u, 'route.test.ts'),
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8', env: { ...process.env, CI: '1' } })
   assert.equal(vitest.status, 0, `the write authority proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)

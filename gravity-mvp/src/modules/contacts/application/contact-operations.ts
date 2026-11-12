@@ -51,6 +51,11 @@ import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-linea
 import { createContactMergePreviewHandlerV1 } from '../internal/contact-merge-preview'
 import { resolveContactWriteAuthorityFromIdentityAccessV1 } from '../internal/identity-access-contact-write-authority'
 import { legacyPrismaContactMergePreviewSourcesV1 } from '../internal/legacy-prisma-contact-merge-preview-adapter'
+import {
+    readContactReachabilityTargetV1 as readContactReachabilityTarget,
+    type ContactReachabilityChannelV1,
+    type ContactReachabilityTargetV1,
+} from '../internal/legacy-prisma-contact-reachability-target-adapter'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
 import {
     CONTACT_COMMUNICATION_NO_RESTRICTION_V1,
@@ -190,6 +195,11 @@ export function createContactCardForConversationReaderV1(resolveConversation: Co
 // contacts.ContactMergePreviewQuery.v1: read-only; the caller has passed the read authority.
 const previewContactMerge = createContactMergePreviewHandlerV1(legacyPrismaContactMergePreviewSourcesV1)
 export const previewContactMergeV1 = (...args: Parameters<typeof previewContactMerge>) => previewContactMerge(...args)
+
+// ContactReachability.v1, the card's «Проверить» (V2 W5): the stored number and exact binding of one
+// Contact's own phone or account, resolved on the server; the caller has passed the write authority.
+export const readContactReachabilityTargetV1 = (...args: Parameters<typeof readContactReachabilityTarget>) => readContactReachabilityTarget(...args)
+export type { ContactReachabilityChannelV1, ContactReachabilityTargetV1 }
 
 // contacts.ContactWriteAuthorityQuery.v1: every Contacts write route asks it first (Security W1).
 export const resolveContactWriteAuthorityV1 = () => resolveContactWriteAuthorityFromIdentityAccessV1()

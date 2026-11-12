@@ -82,11 +82,13 @@ export {
     createContactCardForConversationReaderV1,
     type ContactCardConversationResolverV1,
     readContactPersonCardV1,
+    readContactReachabilityTargetV1,
     previewContactMergeV1,
     resolveContactReadAuthorityV1,
     resolveContactWriteAuthorityV1,
     searchContactsV1,
 } from '../../application/contact-operations'
+export type { ContactReachabilityChannelV1, ContactReachabilityTargetV1 } from '../../application/contact-operations'
 export {
     CONTACT_READ_AUTHORITY_POLICY_VERSION_V1,
     CONTACT_READ_AUTHORITY_QUERY_V1,

@@ -89,6 +89,32 @@ export function MessengersTable({ contactId, rows }: { contactId: string; rows: 
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // «Проверить» (W5): the server resolves the number from this row's ids; the answer is a state, never a number.
+  const [checked, setChecked] = useState<Record<string, 'confirmed' | 'unreachable' | 'checking'>>({})
+  const checkable = (row: MessengerRowV1) => (row.channel === 'telegram' || row.channel === 'whatsapp' || row.channel === 'max') && (row.phoneId !== null || row.identityId !== null)
+
+  async function check(row: MessengerRowV1) {
+    setError(null)
+    setBusy(`check:${row.key}`)
+    try {
+      const response = await fetch(`/contacts/${encodeURIComponent(contactId)}/reachability`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: row.channel, phoneId: row.phoneId, identityId: row.identityId }),
+      })
+      const body = await readJson(response)
+      if (response.ok && (body.status === 'confirmed' || body.status === 'unreachable' || body.status === 'checking')) {
+        setChecked(previous => ({ ...previous, [row.key]: body.status as 'confirmed' | 'unreachable' | 'checking' }))
+        if (body.status !== 'checking') router.refresh()
+        return
+      }
+      setError(REFUSALS[response.status] ?? 'Проверка не выполнена.')
+    } catch {
+      setError('Проверка не выполнена: сервер недоступен.')
+    } finally {
+      setBusy(null)
+    }
+  }
 
   async function write(row: MessengerRowV1) {
     setError(null)
@@ -143,9 +169,10 @@ export function MessengersTable({ contactId, rows }: { contactId: string; rows: 
                   {row.note && <div className="text-[12px] text-[#64748B]">{row.note}</div>}
                 </td>
                 <td className="px-4 py-3">
-                  {row.reachability === 'confirmed' && <Pill tone="ok">Есть</Pill>}
-                  {row.reachability === 'unreachable' && <Pill tone="bad">Нет</Pill>}
-                  {row.reachability === 'unknown' && <Pill tone="muted">Не проверен</Pill>}
+                  {(checked[row.key] ?? row.reachability) === 'confirmed' && <Pill tone="ok">Есть</Pill>}
+                  {(checked[row.key] ?? row.reachability) === 'unreachable' && <Pill tone="bad">Нет</Pill>}
+                  {(checked[row.key] ?? row.reachability) === 'unknown' && <Pill tone="muted">Не проверен</Pill>}
+                  {checked[row.key] === 'checking' && <Pill tone="info">Проверяется</Pill>}
                 </td>
                 <td className="px-4 py-3">
                   {row.bot === 'linked' && <Pill tone="ok">Да</Pill>}
@@ -159,11 +186,19 @@ export function MessengersTable({ contactId, rows }: { contactId: string; rows: 
                   {row.preference === null && <span className="text-[#64748B]">—</span>}
                 </td>
                 <td className="px-4 py-3">
-                  {row.writable ? (
-                    <button type="button" disabled={busy === row.key} onClick={() => write(row)} className="text-[14px] font-medium text-[#2AABEE] hover:text-[#1E96D4] disabled:opacity-60">
-                      {busy === row.key ? 'Открываю…' : 'Написать'}
-                    </button>
-                  ) : <span className="text-[#64748B]">—</span>}
+                  <div className="flex items-center gap-4">
+                    {row.writable && (
+                      <button type="button" disabled={busy === row.key} onClick={() => write(row)} className="text-[14px] font-medium text-[#2AABEE] hover:text-[#1E96D4] disabled:opacity-60">
+                        {busy === row.key ? 'Открываю…' : 'Написать'}
+                      </button>
+                    )}
+                    {checkable(row) && (
+                      <button type="button" disabled={busy === `check:${row.key}`} onClick={() => check(row)} className="text-[14px] font-medium text-[#2AABEE] hover:text-[#1E96D4] disabled:opacity-60">
+                        {busy === `check:${row.key}` ? 'Проверяю…' : 'Проверить'}
+                      </button>
+                    )}
+                    {!row.writable && !checkable(row) && <span className="text-[#64748B]">—</span>}
+                  </div>
                 </td>
               </tr>
             ))}

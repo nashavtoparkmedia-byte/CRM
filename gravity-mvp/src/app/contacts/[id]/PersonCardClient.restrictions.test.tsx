@@ -85,3 +85,20 @@ describe('«Ограничения связи» on the person card', () => {
     expect(screen.getByRole('button', { name: 'Ограничения связи' })).toHaveProperty('disabled', true)
   })
 })
+
+describe('«Проверить» in «Мессенджеры» (W5)', () => {
+  it('sends only the row\'s ids, never a number, and shows the answered state', async () => {
+    const { MessengersTable } = await import('./PersonCardClient')
+    fetchMock.mockImplementation(() => respond(200, { channel: 'whatsapp', status: 'confirmed', reachable: true, confirmed: true, retryable: false }))
+    render(<MessengersTable contactId="contact-1" rows={[{
+      key: 'r1', identityId: 'identity-1', phoneId: 'phone-1', channel: 'whatsapp', channelLabel: 'WhatsApp', account: '+7 999 100-01-01',
+      reachability: 'unknown', bot: 'not_applicable', preference: null, conversationId: null, channelTab: null, writable: false, note: null,
+    }]} />)
+    expect(screen.getByText('Не проверен')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить' }))
+    await waitFor(() => expect(screen.getByText('Есть')).toBeTruthy())
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/contacts/contact-1/reachability')
+    expect(JSON.parse(String(init.body))).toEqual({ channel: 'whatsapp', phoneId: 'phone-1', identityId: 'identity-1' })
+  })
+})
