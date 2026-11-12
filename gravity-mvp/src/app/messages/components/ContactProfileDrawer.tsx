@@ -14,7 +14,7 @@ import CallButton from "@/modules/calling/public/v1/client-ui/CallButton"
 import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
 import ContactResolutionAmbiguityBanner from './ContactResolutionAmbiguityBanner'
 import LinkContactModal from './LinkContactModal'
-import DriverPersonSearchModal from './DriverPersonSearchModal'
+import DriverPersonSearchModal from '@/modules/contacts/public/v1/client-ui/DriverPersonSearchModal'
 import ContactEvidenceDetails from './ContactEvidenceDetails'
 import { resolveContactPersonCardLinkAction } from '../contact-card-link-actions'
 import { personCardLinkChatIdV1, selectDisplayedChatV1 } from '../hooks/displayed-chat'

@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import DriverPersonSearchModal from '@/app/messages/components/DriverPersonSearchModal'
+import DriverPersonSearchModal from '@/modules/contacts/public/v1/client-ui/DriverPersonSearchModal'
 
 export type MessengerRowV1 = {
   key: string

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  */
 const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }))
 vi.mock('next/navigation', () => ({ useRouter: () => router }))
-vi.mock('@/app/messages/components/DriverPersonSearchModal', () => ({ default: () => null }))
+vi.mock('@/modules/contacts/public/v1/client-ui/DriverPersonSearchModal', () => ({ default: () => null }))
 
 import { CardActions, restrictionSummaryV1 } from './PersonCardClient'
 
