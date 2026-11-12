@@ -159,7 +159,7 @@ jobs:
           path: authoritative-ci-execution.json
           if-no-files-found: error
           compression-level: 0
-          retention-days: 30
+          retention-days: 7
 
   gravity-artifact:
     needs: architecture
@@ -290,13 +290,16 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: gravity-image-${{ github.event.pull_request.head.sha || github.sha }}
+          # The image is built, saved and hashed above in this job, and its archive sha256, size and
+          # image id are bound in the attestation. Only the attestation and the CI proof leave the
+          # runner (a few KB): GitHub Free artifact storage cannot hold multi-GB images, and the
+          # image bakes data that must not be downloadable.
           path: |
-            gravity-image.docker.tar
             gravity-image-attestation.json
             authoritative-ci-execution.json
           if-no-files-found: error
           compression-level: 0
-          retention-days: 30
+          retention-days: 7
 
       - name: Record hosted artifact identity
         env:
