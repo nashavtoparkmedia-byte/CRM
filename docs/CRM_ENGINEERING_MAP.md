@@ -18,6 +18,8 @@ Partial update 2026-11-08: §2.7, §3.5, F-24a and I-31b describe the Cash refer
 tools (S4: recorded invitations, separate perpetual Cash access), verified against their own change on top of main `3ac5ce07`.
 Partial update 2026-11-08: §2.4 (tests), F-08 and I-09 describe WhatsApp message admission by provider key (W2), verified
 against its own change on top of main `3ac5ce07`.
+Partial update 2026-11-11: F-08 and I-WA1 (number assigned at landing) describe WhatsApp outbound truth (P-B): own
+messages through `message_create`, acks as S2 delivery evidence, verified against its own change on top of main `05c0419c`.
 
 # YOKO CRM — Engineering Map
 
@@ -877,7 +879,9 @@ collision checks → `createExternalConversationV1` / `patchExternalConversation
 `publishPersistedMessageV1`.
 
 **F-08 WhatsApp inbound**
-`client.on('message')` in `G/lib/whatsapp/WhatsAppService.ts` → instance/filter
+`client.on('message')` in `G/lib/whatsapp/WhatsAppService.ts` (messages from others;
+an own message, a CRM send's echo or one written on the phone, arrives only as
+`message_create`, from which only own messages are taken) → instance/filter
 checks → `assertPrivateWhatsAppConversationConnectionV1` →
 `prisma.whatsAppChat.upsert` → `upsertChannelConversationV1` → F-01 (with
 `canonicalWhatsAppIdentityExternalIdV1`) → `DriverMatchService.linkChatToDriver` →
@@ -1723,6 +1727,20 @@ Each entry: statement — enforcing code — proving test — known exceptions.
   logged with a bounded code and never escapes. — `telegramReadMarker`,
   `applyTelegramReadReceipts`, `processReadHistoryOutbox`,
   `applyTelegramDialogReadMarker` — `tg-actions.identity.test.ts` (TG3R block).
+- **I-WA1 (number assigned at landing) A WhatsApp send is «Ожидает подтверждения» until
+  WhatsApp answers, and only WhatsApp's acks move it on.** `sendText` answers
+  `client_action` with the provider id; the live echo of a CRM send keeps W2's claim
+  and records `provider_echo` (never `delivered`); an own message's ack is S2
+  evidence by its exact provider id only: 1 → `provider_ack`, 2 → `device_receipt`,
+  3 and 4 → `read_receipt`, 0 and -1 nothing, applied only to a WhatsApp outbound row
+  and only when stronger; an ack that overtakes the send's write is retried after
+  1.5 s and 4 s. Background sync applies each own message's history ack (else
+  `history_readback`), so acks missed while the CRM was down are caught up. Media
+  rows (`/api/messages/send-media`, every channel) are still written `delivered`. —
+  `applyWhatsAppDeliveryEvidenceV1`, the `message_create` / `message_ack` listeners
+  in `G/lib/whatsapp/WhatsAppService.ts`, the WhatsApp delivery capability —
+  `WhatsAppService.connection-binding.test.ts` (P-B block),
+  `check-messaging-whatsapp-message-boundary.mjs` (outbound truth).
 - **I-18 A WhatsApp private chat owned by another connection is never written.**
   — `assertPrivateWhatsAppConversationConnectionV1` —
   `WhatsAppService.connection-binding.test.ts`.
