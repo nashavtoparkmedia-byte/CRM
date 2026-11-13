@@ -68,7 +68,7 @@
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "e33a4b1793ed58cfa5efe3112895f4a95a0e625374f7647e7f305a062a96fec7"
+      "sha256": "9501b9a61dba1b1e9fb7356ba56980db84f01c33f95d4e9cc6be9c34dd1645e7"
     },
     {
       "context": "whatsapp_channel",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "f3e1d7f7652f984face501816d9104ab86c708623ddd46def1893c87c03ffe85"
+      "sha256": "bd2b2d2c6a968abadbfeb84e18649e1297bc8f02ced4bd1b9a47c44dfdb548bf"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",

@@ -9,14 +9,21 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+
 import {
+    BOT_LINK_STATUS_MAX_IDS_V1,
+    BOT_LINK_STATUS_QUERY_V1,
     DriverTelegramParkLinkQueryValidationError,
     READ_DRIVER_TELEGRAM_PARK_LINKS_MAX_DRIVER_IDS_V1,
     READ_DRIVER_TELEGRAM_PARK_LINKS_QUERY_V1,
     READ_DRIVER_TELEGRAM_PARK_LINKS_RESULT_V1,
 } from '../../../../contracts/telegram-channel/v1'
 import {
+    createGetDriverTelegramLinkStoredStatusesHandlerV1,
     createReadDriverTelegramParkLinksHandlerV1,
+    type DriverTelegramLinkStoredReadPortV1,
     type DriverTelegramParkLinkReadPortV1,
 } from './driver-telegram-park-link-handler'
 
@@ -94,3 +101,74 @@ describe('read driver Telegram park links', () => {
         })).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTRACT_VERSION' })
     })
 })
+
+describe('telegram.BotLinkStatusQuery.v1 (display-only stored-link status)', () => {
+    const statusQuery = (fields: Record<string, unknown>) => ({ contract: BOT_LINK_STATUS_QUERY_V1, ...fields })
+    function linkPort(telegram: string[] = ['111'], drivers: string[] = ['driver-1']): DriverTelegramLinkStoredReadPortV1 & { calls: unknown[] } {
+        const calls: unknown[] = []
+        return {
+            calls,
+            async findStoredTelegramIds(ids) { calls.push(['telegram', ids]); return telegram.filter(id => ids.some(v => v.toString() === id)) },
+            async findStoredDriverIds(ids) { calls.push(['driver', ids]); return drivers.filter(id => ids.includes(id)) },
+        }
+    }
+
+    it('answers link_stored / no_link_stored / unknown per distinct queried id, status only', async () => {
+        const port = linkPort()
+        const get = createGetDriverTelegramLinkStoredStatusesHandlerV1(port)
+        const result = await get(statusQuery({
+            telegramIds: ['111', '222', '111', '0', '12a', ''],
+            driverIds: ['driver-1', 'driver-2', ' padded'],
+        }))
+        expect(result).toEqual({
+            byTelegramId: { '111': 'link_stored', '222': 'no_link_stored', '0': 'unknown', '12a': 'unknown', '': 'unknown' },
+            byDriverId: { 'driver-1': 'link_stored', 'driver-2': 'no_link_stored', ' padded': 'unknown' },
+        })
+        expect(Object.keys(result).sort()).toEqual(['byDriverId', 'byTelegramId'])
+        // Only well-formed, de-duplicated ids reach the store.
+        expect(port.calls).toEqual([['telegram', [111n, 222n]], ['driver', ['driver-1', 'driver-2']]])
+    })
+
+    it('a failed read answers unknown for that kind only, never a guess', async () => {
+        const get = createGetDriverTelegramLinkStoredStatusesHandlerV1({
+            async findStoredTelegramIds() { throw new Error('db down') },
+            async findStoredDriverIds() { return ['driver-1'] },
+        })
+        await expect(get(statusQuery({ telegramIds: ['111'], driverIds: ['driver-1'] }))).resolves.toEqual({
+            byTelegramId: { '111': 'unknown' },
+            byDriverId: { 'driver-1': 'link_stored' },
+        })
+    })
+
+    it('touches no store for an empty query and refuses an unbounded or foreign one', async () => {
+        const port = linkPort()
+        const get = createGetDriverTelegramLinkStoredStatusesHandlerV1(port)
+        await expect(get(statusQuery({}))).resolves.toEqual({ byTelegramId: {}, byDriverId: {} })
+        expect(port.calls).toEqual([])
+        const tooMany = Array.from({ length: BOT_LINK_STATUS_MAX_IDS_V1 + 1 }, (_, i) => String(i + 1))
+        await expect(get(statusQuery({ telegramIds: tooMany }))).rejects.toBeInstanceOf(DriverTelegramParkLinkQueryValidationError)
+        await expect(get(statusQuery({ driverIds: tooMany }))).rejects.toBeInstanceOf(DriverTelegramParkLinkQueryValidationError)
+        await expect(get({ contract: 'telegram.BotLinkStatusQuery.v2', telegramIds: ['1'] })).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTRACT_VERSION' })
+        await expect(get(statusQuery({ telegramIds: ['1'], includeNames: true }))).rejects.toMatchObject({ code: 'INVALID_CONTRACT' })
+        await expect(get(statusQuery({ telegramIds: [1] }))).rejects.toMatchObject({ code: 'INVALID_CONTRACT' })
+        expect(port.calls).toEqual([])
+    })
+
+    it('is display-only: no access, Cash or fleet-operations code may consume it', () => {
+        const root = join(__dirname, '../../../..')
+        const files: string[] = []
+        const walk = (dir: string) => {
+            for (const name of readdirSync(dir)) {
+                const path = join(dir, name)
+                if (statSync(path).isDirectory()) walk(path)
+                else if (/\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name)) files.push(path)
+            }
+        }
+        for (const dir of ['modules/fleet-operations', 'modules/identity-access', 'app/compensation']) walk(join(root, dir))
+        const consumers = files.filter(file => /getDriverTelegramLinkStoredStatusesV1|BotLinkStatusQuery/.test(readFileSync(file, 'utf8')))
+        expect(consumers).toEqual([])
+        const contract = readFileSync(join(root, 'contracts/telegram-channel/v1/driver-telegram-park-link-queries.ts'), 'utf8')
+        expect(contract).toMatch(/DISPLAY-ONLY[\s\S]*grants[\s*]+nothing[\s*]+and[\s*]+must[\s*]+not[\s*]+be[\s*]+used[\s*]+for[\s*]+any[\s*]+access[\s*]+decision/)
+    })
+})
+

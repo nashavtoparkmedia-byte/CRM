@@ -81,3 +81,65 @@ export function parseReadDriverTelegramParkLinksQueryV1(
     }
     return input as unknown as ReadDriverTelegramParkLinksQueryV1
 }
+
+/**
+ * telegram.BotLinkStatusQuery.v1: is a driver/Telegram bot link STORED.
+ *
+ * DISPLAY-ONLY. It answers, for ids the caller already holds, whether a
+ * DriverTelegram link row exists, for a person card's «ТГ-бот» column. It grants
+ * nothing and must not be used for any access decision (Cash, referral or any
+ * other): those bind a driver through the exact Telegram action binding and
+ * Contacts' provider-bound identity, never through this status. Nothing else
+ * about the link crosses: no counterpart id, name, phone, username or bot state.
+ */
+export const BOT_LINK_STATUS_QUERY_V1 = 'telegram.BotLinkStatusQuery.v1' as const
+
+/** One query may name at most this many Telegram ids and this many driver ids. */
+export const BOT_LINK_STATUS_MAX_IDS_V1 = 200
+
+export type DriverTelegramLinkStoredStatusV1 = 'link_stored' | 'no_link_stored' | 'unknown'
+
+export interface BotLinkStatusQueryV1 {
+    contract: typeof BOT_LINK_STATUS_QUERY_V1
+    telegramIds?: readonly string[]
+    driverIds?: readonly string[]
+}
+
+export interface BotLinkStatusResultV1 {
+    /** One entry per distinct queried Telegram id. */
+    byTelegramId: Readonly<Record<string, DriverTelegramLinkStoredStatusV1>>
+    /** One entry per distinct queried driver id. */
+    byDriverId: Readonly<Record<string, DriverTelegramLinkStoredStatusV1>>
+}
+
+/** A Telegram user id this query can look up: a positive decimal that fits a BigInt column. */
+export function isQueryableTelegramUserIdV1(value: string): boolean {
+    return /^[1-9]\d{0,18}$/u.test(value)
+}
+
+/** A driver id this query can look up: a non-empty, trimmed, bounded string. */
+export function isQueryableDriverIdV1(value: string): boolean {
+    return value.length > 0 && value.length <= 128 && value === value.trim()
+}
+
+export function parseBotLinkStatusQueryV1(input: unknown): BotLinkStatusQueryV1 {
+    if (!isRecord(input)) invalid('query must be an object')
+    const fields = ['contract', 'telegramIds', 'driverIds']
+    const extra = Object.keys(input).filter((key) => !fields.includes(key))
+    if (extra.length) invalid(`unsupported field(s): ${extra.sort().join(', ')}`)
+    if (input.contract !== BOT_LINK_STATUS_QUERY_V1) {
+        if (typeof input.contract === 'string' && input.contract.startsWith('telegram.BotLinkStatusQuery.')) {
+            throw new DriverTelegramParkLinkQueryValidationError('UNSUPPORTED_CONTRACT_VERSION', `unsupported contract version: ${input.contract}`)
+        }
+        invalid(`contract must equal ${BOT_LINK_STATUS_QUERY_V1}`)
+    }
+    for (const field of ['telegramIds', 'driverIds'] as const) {
+        const ids = input[field]
+        if (ids === undefined) continue
+        if (!Array.isArray(ids)) invalid(`${field} must be an array`)
+        if (ids.length > BOT_LINK_STATUS_MAX_IDS_V1) invalid(`${field} must name at most ${BOT_LINK_STATUS_MAX_IDS_V1} ids`)
+        // A malformed id is not a contract error: it is answered 'unknown'.
+        for (const id of ids) if (typeof id !== 'string') invalid(`${field} entries must be strings`)
+    }
+    return input as unknown as BotLinkStatusQueryV1
+}
