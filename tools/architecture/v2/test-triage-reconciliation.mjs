@@ -8,10 +8,10 @@ const records = document.records ?? []
 const ids = records.map(record => record.record_id)
 const signatures = records.map(record => record.site_signature)
 if (records.length !== new Set(ids).size) throw new Error('triage reconciliation has duplicate record IDs')
-if (records.length !== 67) throw new Error('current exact ambiguity denominator drift')
+if (records.length !== 68) throw new Error('current exact ambiguity denominator drift')
 if (records.length !== new Set(signatures).size || records.some((record) => record.record_id !== record.site_signature)) throw new Error('triage reconciliation signature identity drift')
 const signatureDigest = createHash('sha256').update(`${[...signatures].sort().join('\n')}\n`).digest('hex')
-if (signatureDigest !== 'edd05cdfaafd08d9e1ffdf437c4f52301b0c672644f6c3180b277f5a702f4272') throw new Error('current exact ambiguity signature digest drift')
+if (signatureDigest !== '03e5bbcc1eacf3e7d81dfb723991d98055f0aa2d19e543083ed1a71539bd9ce1') throw new Error('current exact ambiguity signature digest drift')
 if (document.current_exact_review?.ambiguous_denominator !== records.length || document.current_exact_review?.sorted_site_signatures_sha256 !== signatureDigest) throw new Error('current exact ambiguity review binding drift')
 if (document.summary.RAW_BASELINE_AMBIGUOUS !== records.length) throw new Error('raw ambiguous count drift')
 const states = new Set(['RESOLVED_NON_WRITE', 'OWNER_VALID_WRITE', 'CONTROLLED_MIGRATION_WRITE', 'MATERIAL_UNRESOLVED_WRITE_RISK'])
@@ -22,7 +22,7 @@ if (document.summary.RECONCILIATION_TOTAL !== records.length || document.summary
 if (document.summary.RESOLVED_NON_WRITE !== counts.RESOLVED_NON_WRITE) throw new Error('resolved non-write count drift')
 if (document.summary.MATERIAL_UNRESOLVED_WRITE_RISK !== counts.MATERIAL_UNRESOLVED_WRITE_RISK) throw new Error('material ambiguity count drift')
 if (counts.RESOLVED_NON_WRITE < 27) throw new Error('static SELECT reclassification regression')
-if (counts.RESOLVED_NON_WRITE !== 43 || counts.OWNER_VALID_WRITE !== 20 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
+if (counts.RESOLVED_NON_WRITE !== 44 || counts.OWNER_VALID_WRITE !== 20 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
   throw new Error('current exact ambiguity disposition count drift')
 }
 for (const id of [
@@ -64,6 +64,11 @@ for (const id of [
 // read-only; it must never be reclassified as a write.
 if (records.find(record => record.record_id === '766142ff4a64bef653c14296789664e24e039f1090f6878733f21ccf7d74f34a')?.semantic_state !== 'RESOLVED_NON_WRITE') {
   throw new Error('ContactLookup name read-only SQL regression')
+}
+// DriverProfilesByExactLicenceQuery.v1 (D2): one static SELECT over Driver and
+// Park, proved read-only; it must never be reclassified as a write.
+if (records.find(record => record.record_id === '318c1432325cc3479a237bab76bdea4731f6316435e8afb90962f2b60eabecd9')?.semantic_state !== 'RESOLVED_NON_WRITE') {
+  throw new Error('Fleet exact-licence read-only SQL regression')
 }
 if (records.find(record => record.record_id === 'f7691415bdb4eb6bcb72502c8df0febd83b69ce0e9280e91988852663bc4a313')?.semantic_state !== 'OWNER_VALID_WRITE') {
   throw new Error('telegram owner-valid nested write regression')

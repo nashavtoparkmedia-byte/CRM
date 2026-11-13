@@ -65,6 +65,7 @@ import { legacyPrismaContactCardSourcePortV1 } from '../internal/legacy-prisma-c
 import { createContactPersonCardHandlerV1 } from '../internal/contact-person-card'
 import { legacyPrismaContactPersonCardSourcePortV1 } from '../internal/legacy-prisma-contact-person-card-source-adapter'
 import { identityAccessContactPersonCardAuthorityV1 } from '../internal/identity-access-contact-person-card-authority'
+import { resolveContactReadAuthorityFromIdentityAccessV1 } from '../internal/identity-access-contact-read-authority'
 import { createSearchContactsHandlerV1 } from '../public/v1/contact-lookup'
 import { legacyPrismaContactLookupPortV1 } from '../public/v1/legacy-prisma-contact-lookup-adapter'
 import { identityAccessContactCardAuthorityV1 } from '../internal/identity-access-contact-card-authority'
@@ -133,6 +134,12 @@ const readContactPersonCard = createContactPersonCardHandlerV1({
  * Contact id and renders the answer.
  */
 export const readContactPersonCardV1 = (...args: Parameters<typeof readContactPersonCard>) => readContactPersonCard(...args)
+/**
+ * ContactReadAuthorityQuery.v1: may this request read people, and which ВУ view
+ * applies. Evaluate once per request before any people read, and hand the
+ * `licenceView` on unchanged (docs/design/d2-contacts-read-authority-v1.md).
+ */
+export const resolveContactReadAuthorityV1 = () => resolveContactReadAuthorityFromIdentityAccessV1()
 const searchContacts = createSearchContactsHandlerV1(legacyPrismaContactLookupPortV1)
 /** ContactLookup.v1: which Contact is this? Never whether it can be reached or messaged. */
 export const searchContactsV1 = (...args: Parameters<typeof searchContacts>) => searchContacts(...args)

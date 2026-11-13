@@ -20,6 +20,10 @@ export { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-ph
 export type { FindDriverByExactPhonePersistencePortV1 } from './find-driver-by-exact-phone-handler'
 export { createDriverProfilesForContactsHandlerV1, projectDriverProfileForContactV1 } from './driver-profiles-for-contacts-handler'
 export type { DriverProfileRowV1, DriverProfilesForContactsPersistencePortV1 } from './driver-profiles-for-contacts-handler'
+export { createDriverProfilesForContactsHandlerV2 } from './driver-profiles-for-contacts-v2-handler'
+export { createDriverProfilesByExactLicenceHandlerV1 } from './driver-profiles-by-exact-licence-handler'
+export type { DriverLicenceProfileRowV1, DriverLicenceReadPortV1 } from './driver-licence-read-port'
+export { DRIVER_LICENCE_MASK_V1, maskDriverLicenceV1 } from './driver-licence-mask'
 export { createGetDriverCallablePhoneHandlerV1 } from './get-driver-callable-phone-handler'
 export type { GetDriverCallablePhonePersistencePortV1 } from './get-driver-callable-phone-handler'
 export {
@@ -67,6 +71,8 @@ export {
     dispatchScheduledScraperChecksV1,
     findDriverByExactPhoneV1,
     readDriverProfilesForContactsV1,
+    readDriverProfilesForContactsV2,
+    findDriverProfilesByExactLicenceV1,
     getDriverCallablePhoneV1,
     searchLocalDriversV1,
     getParkLinkedDriverPhoneV1,

@@ -34,6 +34,17 @@ function basisFor(query: string): 'fio' | 'phone' | 'vu' {
   return 'fio'
 }
 
+// The search changes Fleet data, so it answers only the integration-admin session
+// and is rate-limited (Security 2026-11-12); each refusal is said plainly.
+const SEARCH_REFUSALS: Record<number, string> = {
+  400: 'Введите не меньше 5 букв имени, 7 цифр телефона или номер ВУ.',
+  401: 'Поиск по паркам доступен только через «Доступ к интеграциям».',
+  403: 'Запрос отклонён проверкой безопасности.',
+  429: 'Слишком много поисков подряд. Подождите минуту и повторите.',
+  503: 'Поиск по паркам сейчас недоступен. Попробуйте позже.',
+  504: 'Парки отвечают слишком долго. Попробуйте ещё раз.',
+}
+
 export default function DriverPersonSearchModal({
   contactId,
   isOpen,
@@ -57,9 +68,9 @@ export default function DriverPersonSearchModal({
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/monitoring/fleet-check/driver-person?query=${encodeURIComponent(query)}`)
-      const body = await response.json()
-      if (!response.ok) throw new Error(body.error || 'Поиск не выполнен')
+      const response = await fetch(`/api/monitoring/fleet-check/driver-person?query=${encodeURIComponent(query)}`, { cache: 'no-store' })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(SEARCH_REFUSALS[response.status] ?? body.error ?? 'Поиск не выполнен')
       setClusters(body.clusters || [])
       if (body.errors?.length) setError(`Часть парков недоступна: ${body.errors.length}`)
     } catch (cause) {

@@ -16,20 +16,20 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 67,
+    "RAW_BASELINE_AMBIGUOUS": 68,
     "CONFIRMED_WRITE_OWNER_RESOLVED": 24,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
     "QUERY_RAW_SIDE_EFFECT_UNRESOLVED": 0,
     "SOURCE_FAMILY_REVIEW_REQUIRED": 0,
-    "CONFIRMED_NON_WRITE": 43,
+    "CONFIRMED_NON_WRITE": 44,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
-    "RESOLVED_NON_WRITE": 43,
+    "RESOLVED_NON_WRITE": 44,
     "OWNER_VALID_WRITE": 20,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 67,
+    "RECONCILIATION_TOTAL": 68,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -3531,12 +3531,71 @@
       "ownership_classification": null,
       "final_ownership_classification": null,
       "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "318c1432325cc3479a237bab76bdea4731f6316435e8afb90962f2b60eabecd9",
+      "site_signature": "318c1432325cc3479a237bab76bdea4731f6316435e8afb90962f2b60eabecd9",
+      "source_sha256": "ccc1c476c694e1087d23bb67edefb07dd5ed4b7565d559cbec990fc27f4a828a",
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-licence-adapter.ts",
+      "line": 25,
+      "column": 24,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Driver",
+        "Park"
+      ],
+      "selected_columns": [
+        "contactId",
+        "dismissedAt",
+        "externalDriverProfileId",
+        "externalParkId",
+        "fullName",
+        "id",
+        "licenseNumber",
+        "parkId",
+        "parkName"
+      ],
+      "called_functions": [
+        "coalesce",
+        "regexp_replace",
+        "upper"
+      ],
+      "sql_sha256": "97c97e8b3cb0c9b78e7df02caadfd2fae4178fd9dac0a0bf04f64f837beb54df",
+      "sql_provenance_sha256": "0b2c8715004aef2ba32b8b0ef2e307cc235c4045909cb85a8b2962c40ef4555d",
+      "source_context": "fleet_operations",
+      "source_technical_module": "fleet_operations.module",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves one static SELECT over the Fleet-owned Driver table with its Fleet-owned Park (DriverProfilesByExactLicenceQuery.v1, Owner D2): the SQL text is fixed, the licence key and the limit are bound parameters, and the compared licence uses only coalesce, regexp_replace and upper; no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 67,
+    "ambiguous_denominator": 68,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "edd05cdfaafd08d9e1ffdf437c4f52301b0c672644f6c3180b277f5a702f4272",
+    "sorted_site_signatures_sha256": "03e5bbcc1eacf3e7d81dfb723991d98055f0aa2d19e543083ed1a71539bd9ce1",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "pr81_conflict_repair_write_ambiguity_review": {
@@ -5384,6 +5443,50 @@
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation; the statement reads Contact ids and folded display names only.",
         "source_sha256:8a0ba68ec9853aa813295e1df3c7e68da834ef3808a4e21c97e3557a8a0c0041",
         "sql_provenance_sha256:1d3548e02fb10a711aa9b865cdf9a85b2b5ec5de9764ed243b2f6ecc7d160c5a"
+      ]
+    },
+    {
+      "site_signature": "318c1432325cc3479a237bab76bdea4731f6316435e8afb90962f2b60eabecd9",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-licence-adapter.ts",
+        "line": 25,
+        "column": 24,
+        "method": "$queryRaw",
+        "source_sha256": "ccc1c476c694e1087d23bb67edefb07dd5ed4b7565d559cbec990fc27f4a828a",
+        "sql_provenance_sha256": "0b2c8715004aef2ba32b8b0ef2e307cc235c4045909cb85a8b2962c40ef4555d"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Driver",
+          "Park"
+        ],
+        "selected_columns": [
+          "contactId",
+          "dismissedAt",
+          "externalDriverProfileId",
+          "externalParkId",
+          "fullName",
+          "id",
+          "licenseNumber",
+          "parkId",
+          "parkName"
+        ],
+        "sql_sha256": "97c97e8b3cb0c9b78e7df02caadfd2fae4178fd9dac0a0bf04f64f837beb54df",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "regexp_replace",
+          "upper"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-licence-adapter.ts:25:24",
+        "analysis_site_signature:318c1432325cc3479a237bab76bdea4731f6316435e8afb90962f2b60eabecd9",
+        "sql_sha256:97c97e8b3cb0c9b78e7df02caadfd2fae4178fd9dac0a0bf04f64f837beb54df",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation; the statement reads Driver profile columns and the Park name only.",
+        "source_sha256:ccc1c476c694e1087d23bb67edefb07dd5ed4b7565d559cbec990fc27f4a828a",
+        "sql_provenance_sha256:0b2c8715004aef2ba32b8b0ef2e307cc235c4045909cb85a8b2962c40ef4555d"
       ]
     }
   ]

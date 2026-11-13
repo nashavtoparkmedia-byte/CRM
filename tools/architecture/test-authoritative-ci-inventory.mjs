@@ -592,9 +592,22 @@ assert.match(
 )
 assert.match(
   workflow,
-  /path: \|\s*\n\s*gravity-image\.docker\.tar\s*\n\s*gravity-image-attestation\.json\s*\n\s*authoritative-ci-execution\.json/u,
-  'the final hosted Gravity artifact must transitively bind the runner-emitted CI proof',
+  /path: \|\s*\n\s*gravity-image-attestation\.json\s*\n\s*authoritative-ci-execution\.json\s*\n\s*if-no-files-found: error/u,
+  'the final hosted Gravity artifact must transitively bind the runner-emitted CI proof and the image attestation',
 )
+{
+  // The built image never leaves the runner: only its attestation (archive sha256, size, image id)
+  // and the CI proof are uploaded, and every upload expires within 7 days (GitHub Free storage).
+  const uploads = workflow.split(/\n      - name: /u).filter((step) => /uses: actions\/upload-artifact@/u.test(step))
+  assert(uploads.length >= 2, 'the CI proof and the Gravity attestation uploads must exist')
+  for (const step of uploads) {
+    assert.doesNotMatch(step, /\.docker\.tar|\.tar\b|\.oci\b/u, 'no image archive may be uploaded as an artifact')
+    const retention = /retention-days: (\d+)/u.exec(step)
+    assert(retention && Number(retention[1]) <= 7, 'every artifact must expire within 7 days')
+  }
+  assert.match(workflow, /docker image save --output gravity-image\.docker\.tar "\$image"/u, 'the image must still be built and saved in the artifact job')
+  assert.match(workflow, /'docker_archive': \{[\s\S]*'sha256': archive_sha256,[\s\S]*'bytes': archive_bytes,/u, 'the attestation must still bind the archive digest and size')
+}
 for (const prefix of ['gravity-mvp', 'tg-bot']) {
   const install = workflow.indexOf(`npm ci --prefix ${prefix}`)
   const generate = workflow.indexOf(`npm run --prefix ${prefix} gen`)
