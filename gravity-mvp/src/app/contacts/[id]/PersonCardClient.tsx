@@ -91,6 +91,8 @@ export function MessengersTable({ contactId, rows }: { contactId: string; rows: 
   const [error, setError] = useState<string | null>(null)
   // «Проверить» (W5): the server resolves the number from this row's ids; the answer is a state, never a number.
   const [checked, setChecked] = useState<Record<string, 'confirmed' | 'unreachable' | 'checking'>>({})
+  const shownReachability = (row: MessengerRowV1): MessengerRowV1['reachability'] | 'checking' =>
+    Object.prototype.hasOwnProperty.call(checked, row.key) ? checked[row.key] : row.reachability
   const checkable = (row: MessengerRowV1) => (row.channel === 'telegram' || row.channel === 'whatsapp' || row.channel === 'max') && (row.phoneId !== null || row.identityId !== null)
 
   async function check(row: MessengerRowV1) {
@@ -169,10 +171,10 @@ export function MessengersTable({ contactId, rows }: { contactId: string; rows: 
                   {row.note && <div className="text-[12px] text-[#64748B]">{row.note}</div>}
                 </td>
                 <td className="px-4 py-3">
-                  {(checked[row.key] ?? row.reachability) === 'confirmed' && <Pill tone="ok">Есть</Pill>}
-                  {(checked[row.key] ?? row.reachability) === 'unreachable' && <Pill tone="bad">Нет</Pill>}
-                  {(checked[row.key] ?? row.reachability) === 'unknown' && <Pill tone="muted">Не проверен</Pill>}
-                  {checked[row.key] === 'checking' && <Pill tone="info">Проверяется</Pill>}
+                  {shownReachability(row) === 'confirmed' && <Pill tone="ok">Есть</Pill>}
+                  {shownReachability(row) === 'unreachable' && <Pill tone="bad">Нет</Pill>}
+                  {shownReachability(row) === 'unknown' && <Pill tone="muted">Не проверен</Pill>}
+                  {shownReachability(row) === 'checking' && <Pill tone="info">Проверяется</Pill>}
                 </td>
                 <td className="px-4 py-3">
                   {row.bot === 'linked' && <Pill tone="ok">Да</Pill>}
