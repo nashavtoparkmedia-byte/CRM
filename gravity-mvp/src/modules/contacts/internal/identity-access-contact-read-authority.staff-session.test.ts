@@ -140,7 +140,9 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', () => {
+// Real staff tokens and password hashes (scrypt): under the person-card control's
+// parallel workers these tests can pass the 5 s default, so they get their own bound.
+describe('ContactReadAuthorityQuery.v1 over the real Staff Session path', { timeout: 30_000 }, () => {
   test('a staff cookie on a lane without a secret is refused, and the admin session beside it is not used', async () => {
     configureAdmin()
     const admin = issueIntegrationAdminSession()!
