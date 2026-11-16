@@ -24,8 +24,7 @@ import {
 } from './contact-communication-policy'
 import { makePrismaContactCommunicationPolicyStoreV1 } from '../../internal/legacy-prisma-contact-communication-policy-adapter'
 
-/** Exactly what the merge loads per Contact; the card's read-only merge preview loads the same. */
-export const contactMergeInclude = {
+const contactMergeInclude = {
   phones: true,
   identities: true,
   chats: { select: { id: true } },
@@ -47,7 +46,7 @@ class LockedContactMergeLineageError extends Error {
   }
 }
 
-export function normalizeContactMergeRow(row: ContactMergeRow | null): ContactMergeSourceV1 | null {
+function normalizeContactMergeRow(row: ContactMergeRow | null): ContactMergeSourceV1 | null {
   if (!row) return null
   const { driver, mainDriver, ...contact } = row
   const driverProfiles = new Map(contact.driverProfiles.map(profile => [profile.id, profile]))
