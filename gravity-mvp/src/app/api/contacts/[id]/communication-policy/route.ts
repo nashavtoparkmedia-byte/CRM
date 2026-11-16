@@ -3,7 +3,7 @@ import { SET_CONTACT_COMMUNICATION_POLICY_COMMAND_V1 } from '@/contracts/contact
 import {
   readContactCommunicationRestrictionV1,
   setContactCommunicationPolicyV1,
-} from '@/modules/contacts/application/contact-operations'
+} from '@/modules/contacts/application/contact-communication-restriction-operations'
 import { resolveContactReadAuthorityV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import { isExactSameOriginMutationRequest, isJsonMutationRequest } from '@/modules/identity-access/public/v1'
 

@@ -17,7 +17,7 @@ vi.mock('@/modules/contacts/public/v1', () => ({
   resolveContactWriteAuthorityV1: mocks.writer,
   resolveContactReadAuthorityV1: mocks.reader,
 }))
-vi.mock('@/modules/contacts/application/contact-operations', () => ({
+vi.mock('@/modules/contacts/application/contact-communication-restriction-operations', () => ({
   setContactCommunicationPolicyV1: mocks.set,
   readContactCommunicationRestrictionV1: mocks.read,
 }))

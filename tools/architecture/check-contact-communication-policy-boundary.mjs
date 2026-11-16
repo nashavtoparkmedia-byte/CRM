@@ -321,8 +321,8 @@ function assertSingleStoreAndContainedMutation(sources) {
  */
 function assertCardAdopter(sources) {
   const adopter = withoutComments(sources[CARD_ADOPTER])
-  assert(adopter.includes("import {\n  readContactCommunicationRestrictionV1,\n  setContactCommunicationPolicyV1,\n} from '@/modules/contacts/application/contact-operations'"),
-    'the card adopter does not take exactly the mutation and its read from the Contacts application layer')
+  assert(adopter.includes("import {\n  readContactCommunicationRestrictionV1,\n  setContactCommunicationPolicyV1,\n} from '@/modules/contacts/application/contact-communication-restriction-operations'"),
+    'the card adopter does not take exactly the mutation and its read from the Contacts restriction operations')
   for (const name of MUTATION_PATH_NAMES.filter((candidate) => !['setContactCommunicationPolicyV1', 'SET_CONTACT_COMMUNICATION_POLICY_COMMAND_V1'].includes(candidate))) {
     assert(!adopter.includes(name), `the card adopter reaches the mutation machinery itself: ${name}`)
   }
