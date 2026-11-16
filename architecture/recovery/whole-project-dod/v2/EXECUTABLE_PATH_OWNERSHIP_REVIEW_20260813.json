@@ -3523,7 +3523,7 @@
       "functional_owner": "legacy_gravity_runtime",
       "exclusion": "gravity_runtime_remainder",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "0a042fbc13c311456757a263a13dcea26381bb5acf1ab03c68f4dd40cf0d3db6",
+      "source_sha256": "0c86ad4f6fec1386fc7ecc7d0e6632999ef77aec1d1f4ee692c5d460c042313c",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review under the Owner's Contact Identity V2 mandate (2026-11-11, P1, design accepted by the Owner 2026-11-13) admits this exact path — the person card's «Ограничения связи» transport: GET answers the canonical Contact's three standing restriction flags and their version under Contacts' read authority; POST sets or lifts them as the complete state with a required reason, the version decided against and a request id, after the same-origin JSON check and Contacts' write authority, recording only the authority's actor, answering a stale version with 409, never cached (Security W4). It is the one admitted adopter of Contacts' policy mutation outside the module, pinned by the communication-policy control. Exclusion gravity_runtime_remainder under the finite legacy_gravity_runtime owner, as its D2 peer POST /contacts/licence-search."
     },
