@@ -182,6 +182,7 @@
         "ContactCommunicationPermissionQuery.v1",
         "ContactDisplayPolicy.v1",
         "ContactIdentityMaintenance.v1",
+        "ContactIdentityMembershipQuery.v1",
         "ContactLookup.v1",
         "ContactPersonCardQuery.v1",
         "ContactReachability.v1",

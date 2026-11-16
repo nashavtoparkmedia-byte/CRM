@@ -127,7 +127,8 @@
     "ContactIdentityMaintenance.v1",
     "ContactCommunicationPermissionQuery.v1",
     "ContactCardForConversationQuery.v1",
-    "ContactPersonCardQuery.v1"
+    "ContactPersonCardQuery.v1",
+    "ContactIdentityMembershipQuery.v1"
   ],
   "responsibility": "Canonical people, phone/identity resolution, merges and channel-independent reachability identity.",
   "schema": "yoko.crm.module-manifest.v1",

@@ -83,6 +83,7 @@ export {
     type ContactCardConversationResolverV1,
     readContactPersonCardV1,
     readContactReachabilityTargetV1,
+    readContactIdentityMembershipV1,
     previewContactMergeV1,
     resolveContactReadAuthorityV1,
     resolveContactWriteAuthorityV1,

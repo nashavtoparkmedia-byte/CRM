@@ -51,6 +51,8 @@ import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-linea
 import { createContactMergePreviewHandlerV1 } from '../internal/contact-merge-preview'
 import { resolveContactWriteAuthorityFromIdentityAccessV1 } from '../internal/identity-access-contact-write-authority'
 import { legacyPrismaContactMergePreviewSourcesV1 } from '../internal/legacy-prisma-contact-merge-preview-adapter'
+import { createContactIdentityMembershipHandlerV1 } from '../internal/contact-identity-membership'
+import { legacyPrismaContactIdentityMembershipSourceV1 } from '../internal/legacy-prisma-contact-identity-membership-adapter'
 import {
     readContactReachabilityTargetV1 as readContactReachabilityTarget,
     type ContactReachabilityChannelV1,
@@ -200,6 +202,10 @@ export const previewContactMergeV1 = (...args: Parameters<typeof previewContactM
 // Contact's own phone or account, resolved on the server; the caller has passed the write authority.
 export const readContactReachabilityTargetV1 = (...args: Parameters<typeof readContactReachabilityTarget>) => readContactReachabilityTarget(...args)
 export type { ContactReachabilityChannelV1, ContactReachabilityTargetV1 }
+
+// contacts.ContactIdentityMembershipQuery.v1 (V2, for Messaging's «Для связи»): states of exact accounts, ids only.
+const readContactIdentityMembership = createContactIdentityMembershipHandlerV1(legacyPrismaContactIdentityMembershipSourceV1)
+export const readContactIdentityMembershipV1 = (...args: Parameters<typeof readContactIdentityMembership>) => readContactIdentityMembership(...args)
 
 // contacts.ContactWriteAuthorityQuery.v1: every Contacts write route asks it first (Security W1).
 export const resolveContactWriteAuthorityV1 = () => resolveContactWriteAuthorityFromIdentityAccessV1()
