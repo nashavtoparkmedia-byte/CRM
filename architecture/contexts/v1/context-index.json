@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "8fc2cb475c68fb0300e2dfb39b14022de54c7b9c7a1d0d06f813eac52484d50b"
+      "sha256": "3fb894c59f8619ac50abe8364639d506f6239266dd37c9f3b3a572280f474193"
     },
     {
       "context": "edge_delivery",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "730281bd4001bda17e96a251ab4a537ddc8cffa9761e08f55626a977ef634cea"
+      "sha256": "e9d4e436de3192e5ae9d2d9e3b6e65e76fc2229f2492433ca07057c6c22a7cde"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "5789f3e88fbbeff6caf8f3e67d895b64f157e829fb2f0e6a9eee31586f6a0e73"
+      "sha256": "c4753a231ad0d640fcf51c64379b8933a3c6f49573a653040482e0315f4cd483"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
