@@ -4812,6 +4812,42 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "security-head-pii-telegram-id-scripts-main-9e08579c-20261117",
+      "reviewed_at": "2026-11-17T00:00:00Z",
+      "reviewed_by": "TELEGRAM_RELIABILITY_HEAD_PII_HYGIENE_EXECUTOR_REVIEW_9E08579C",
+      "role": "IMPLEMENTATION_EXECUTOR_REVIEW",
+      "authorization": "SECURITY_PUBLIC_REPO_EXPOSURE_PLAN_S3_HEAD_PII_ORCH_ASSIGNMENT_20261112",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved as the historical review event and is not restated by this amendment. This amendment extends the chain published on main at 9e08579c, whose tail is contact-identity-contact-get-read-authority-main-5d40f860-after-d2-20261112, and leaves that amendment and every earlier one untouched. It records one removed tracked surface and carries no source-hash rebind."
+      },
+      "reason": "Records the HEAD personal-data hygiene on main 9e08579c (Security public-repo exposure plan section 3). One dead historical operational script, whose body hard-coded a real person's Telegram id and whose file name carried a surname, is deleted together with its lifecycle entry and the four maintenance capabilities it sourced: 2,882 - 1 = 2,881 tracked executable surfaces, context-owned 1,612, governed exclusions 1,269. The seven other scripts that held the id now read it from configuration with no default; they carry no exact-inventory assignment, so no source-hash rebind is required. The current triple is the repository's own derivation over this exact clean candidate (preview_reviewed_current_denominator, which writes nothing). Its position binds it to this chain tail only: if another amendment lands on main first, it is regenerated over the then-current main.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2882,
+        "tracked_inventory_sha256": "08d2db2e44be421f165790ab9da953634633673c66fc0dacb55538300766c507",
+        "coverage_sha256": "89106923d1c74845c702926ea506af234697f6aa5770bdcff478103a23616115"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2881,
+        "tracked_inventory_sha256": "eb490df8005e85d7a0ec92e12c8f57005b457e3436a8557cbfb964090f417c6b",
+        "coverage_sha256": "d669b834b5cc08c7127b93ab0496cc839af5f9755c1ed038675b7939d3659a62"
+      },
+      "source_hash_rebinds": [],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
