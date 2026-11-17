@@ -68,7 +68,7 @@
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "9501b9a61dba1b1e9fb7356ba56980db84f01c33f95d4e9cc6be9c34dd1645e7"
+      "sha256": "3dcc7e1afa3e714fa8a1bcdd4e6f688ba5803359cfd3b582263d994d3eb8eb90"
     },
     {
       "context": "whatsapp_channel",

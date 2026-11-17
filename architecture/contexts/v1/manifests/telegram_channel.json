@@ -304,7 +304,8 @@
     "blast_radius": {
       "consumer_contexts": [
         "configuration",
-        "edge_delivery"
+        "edge_delivery",
+        "platform_shell"
       ],
       "owner_context": "telegram_channel",
       "provider_scope": "PROVIDER_SPECIFIC",
