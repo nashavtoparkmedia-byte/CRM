@@ -211,6 +211,15 @@ function assertComposition(read = readRepo) {
     'if (!staffIds.includes(user.id)) continue',
   ], 'the composition staff names')
   assert(composition.includes('readStaffDirectory: listUserIdentitiesV1,'), 'the staff names are not bound to Identity Access\'s directory')
+  // «ТГ-бот»: Telegram's display-only read, after Contacts confirmed, with exactly the person's own Telegram account ids.
+  order(composition, [
+    "if (answer.status !== 'confirmed') return { status: answer.status }",
+    ".filter(channel => channel.channel === 'telegram')",
+    '.filter(isQueryableTelegramUserIdV1))].slice(0, BOT_LINK_STATUS_MAX_IDS_V1)',
+    'telegramIds.length === 0 || deps.readBotLinkStatuses === undefined',
+    'deps.readBotLinkStatuses!({ contract: BOT_LINK_STATUS_QUERY_V1, telegramIds })',
+  ], 'the composition bot links')
+  assert(composition.includes('readBotLinkStatuses: getDriverTelegramLinkStoredStatusesV1,'), 'the bot column is not bound to Telegram\'s BotLinkStatusQuery.v1')
   const page = withoutComments(read(PAGE))
   assert(page.includes("if (result.status === 'redirected') redirect("), 'a merged-away id is no longer followed to its canonical Contact')
   assert(page.includes("if (result.status === 'missing') notFound()"), 'a missing Contact is no longer a 404')
@@ -294,6 +303,7 @@ const MUTANTS = [
   [COMPOSITION, 'readDriverProfilesForContacts: readDriverProfilesForContactsV3,', 'readDriverProfilesForContacts: readDriverProfilesForContactsV1,'],
   [COMPOSITION, '        if (!staffIds.includes(user.id)) continue\n', ''],
   [COMPOSITION, 'staffIds.length === 0 || deps.readStaffDirectory === undefined', 'deps.readStaffDirectory === undefined'],
+  [COMPOSITION, "      .filter(channel => channel.channel === 'telegram')\n", ''],
   [LICENCE_SEARCH, "const licenceView = authority.licenceView === 'full' ? 'full' : 'last4'", "const licenceView = authority.licenceView ?? 'full'"],
   [LICENCE_SEARCH, "if (authority.decision !== 'allow') return { status: 'denied' }", ''],
   [LICENCE_SEARCH, 'if (!answer.profiles.every(profile => maskedForView(profile.licence, licenceView))) {', 'if (false) {'],

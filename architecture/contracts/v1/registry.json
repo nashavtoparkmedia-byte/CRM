@@ -504,7 +504,8 @@
       ],
       "consumer_contexts": [
         "configuration",
-        "edge_delivery"
+        "edge_delivery",
+        "platform_shell"
       ],
       "events": [
         "TelegramDriverLinked.v1",
@@ -1003,6 +1004,13 @@
       "target_context": "operations_observability",
       "target_surface": "operations_observability.public",
       "target_surface_id": "operations_observability.public.v1"
+    },
+    {
+      "id": "platform_shell>telegram_channel.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "telegram_channel",
+      "target_surface": "telegram_channel.public",
+      "target_surface_id": "telegram_channel.public.v1"
     },
     {
       "id": "platform_shell>work_management.public.v1",

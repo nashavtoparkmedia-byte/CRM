@@ -194,9 +194,9 @@ function accountLabel(account: { externalId: string; username: string | null; di
  * Block 2 rows: every stored account of the person (several per messenger
  * when they exist, former ones included), then every current phone × messenger
  * the person has no account on yet, as «не проверен». Presence is what the
- * existing reachability check persisted; the bot column waits for Telegram's
- * stored-link read and «Для связи» for Messaging's preference, so both say they
- * are unknown rather than guess.
+ * existing reachability check persisted; the bot column is Telegram's display-only
+ * stored-link status for each Telegram account (unknown when it could not be read),
+ * and «Для связи» waits for Messaging's preference, so it says «—» rather than guess.
  */
 function messengerRows(view: ContactPersonCardViewV1): MessengerRowV1[] {
   const { card, conversations } = view
@@ -219,7 +219,10 @@ function messengerRows(view: ContactPersonCardViewV1): MessengerRowV1[] {
         channelLabel: channelLabel(channel.channel),
         account: accountLabel(account, channel.channel, phones),
         reachability: account.reachabilityStatus,
-        bot: channel.channel === 'telegram' ? 'unknown' : 'not_applicable',
+        bot: channel.channel !== 'telegram' ? 'not_applicable'
+          : view.botLinks?.[account.externalId] === 'link_stored' ? 'linked'
+          : view.botLinks?.[account.externalId] === 'no_link_stored' ? 'not_linked'
+          : 'unknown',
         preference: null,
         // With one active account the channel's conversation is that account's; otherwise the server finds the exact one.
         conversationId: account.isActive && active.length === 1 && conversation ? conversation.primaryConversationId : null,

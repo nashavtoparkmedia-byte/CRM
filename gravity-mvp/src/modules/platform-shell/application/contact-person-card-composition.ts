@@ -18,6 +18,10 @@
 //      employees this card's «История связей» names as actors (Security W8),
 //      read only when there is one; anyone else stays out of the answer, and an
 //      unavailable directory leaves them «сотрудник».
+//   5. Telegram's BotLinkStatusQuery.v1 — DISPLAY-ONLY: whether a bot link is
+//      stored for each Telegram account of the person, for the «ТГ-бот» column,
+//      read only after Contacts confirmed and only with the person's own
+//      Telegram account ids; an unavailable read leaves «неизвестно».
 // Fleet and Messaging answers are enrichment: when one of them fails the page is
 // still shown, with that block marked partial, never with invented data. Nothing
 // here matches, merges or links; it only lays the three answers side by side.
@@ -40,6 +44,14 @@ import { readContactPersonCardV1 } from '@/modules/contacts/public/v1'
 import { DRIVER_LICENCE_MASK_V1, readDriverProfilesForContactsV3 } from '@/modules/fleet-operations/public/v1'
 import { contactConversationsV1 } from '@/modules/messaging/public/v1'
 import { listUserIdentitiesV1 } from '@/modules/identity-access/public/v1/user-directory'
+import {
+  BOT_LINK_STATUS_MAX_IDS_V1,
+  BOT_LINK_STATUS_QUERY_V1,
+  isQueryableTelegramUserIdV1,
+  type BotLinkStatusResultV1,
+  type DriverTelegramLinkStoredStatusV1,
+} from '@/contracts/telegram-channel/v1'
+import { getDriverTelegramLinkStoredStatusesV1 } from '@/modules/telegram-channel/public/v1'
 
 export type ContactPersonCardDriverProfileV1 = DriverProfileForContactV3 & {
   /** Which Contact of the lineage this row was matched through. */
@@ -73,6 +85,8 @@ export type ContactPersonCardViewV1 = {
   partial: { driverProfiles: boolean; conversations: boolean }
   /** Directory names of exactly the employees the card's history names, by user id. */
   staffNames: Record<string, string>
+  /** Telegram's display-only stored bot-link status per Telegram account id of this person; absent = unknown. */
+  botLinks: Record<string, DriverTelegramLinkStoredStatusV1>
 }
 
 export type ContactPersonCardLoadResultV1 =
@@ -86,6 +100,8 @@ export type ContactPersonCardCompositionDependenciesV1 = {
   readContactConversations: (query: unknown) => Promise<ContactConversationsResultV1>
   /** Identity Access's operator directory; without it every employee in the history stays «сотрудник». */
   readStaffDirectory?: () => Promise<ReadonlyArray<{ id: string; firstName: string; lastName: string }>>
+  /** Telegram's BotLinkStatusQuery.v1 (display-only); without it the «ТГ-бот» column stays «неизвестно». */
+  readBotLinkStatuses?: (query: unknown) => Promise<BotLinkStatusResultV1>
 }
 
 /** Under a last-4 view a shown ВУ is either absent or starts with Fleet's mask. */
@@ -115,13 +131,27 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
       legacyYandexDriverId: id === card.contactId ? card.legacyYandexDriverId : null,
     }))
     const staffIds = [...new Set(card.linkHistory.flatMap(event => (event.actor.kind === 'staff' ? [event.actor.userId] : [])))]
-    const [profiles, conversations, directory] = await Promise.all([
+    const telegramIds = [...new Set(card.channels
+      .filter(channel => channel.channel === 'telegram')
+      .flatMap(channel => channel.accounts.map(account => account.externalId))
+      .filter(isQueryableTelegramUserIdV1))].slice(0, BOT_LINK_STATUS_MAX_IDS_V1)
+    const [profiles, conversations, directory, botLinkAnswer] = await Promise.all([
       settle(() => deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V3, licenceView, subjects })),
       settle(() => deps.readContactConversations({ contract: CONTACT_CONVERSATIONS_QUERY_V1, contactIds: lineageIds.slice(0, 25) })),
       staffIds.length === 0 || deps.readStaffDirectory === undefined
         ? Promise.resolve({ ok: false as const })
         : settle(deps.readStaffDirectory),
+      telegramIds.length === 0 || deps.readBotLinkStatuses === undefined
+        ? Promise.resolve({ ok: false as const })
+        : settle(() => deps.readBotLinkStatuses!({ contract: BOT_LINK_STATUS_QUERY_V1, telegramIds })),
     ])
+    const botLinks: Record<string, DriverTelegramLinkStoredStatusV1> = {}
+    if (botLinkAnswer.ok) {
+      for (const telegramId of telegramIds) {
+        const status = botLinkAnswer.value.byTelegramId[telegramId]
+        if (status === 'link_stored' || status === 'no_link_stored') botLinks[telegramId] = status
+      }
+    }
     const staffNames: Record<string, string> = {}
     if (directory.ok) {
       for (const user of directory.value) {
@@ -195,6 +225,7 @@ export function createContactPersonCardCompositionV1(deps: ContactPersonCardComp
           .sort((left, right) => (left.channel < right.channel ? -1 : left.channel > right.channel ? 1 : 0)),
         partial: { driverProfiles: !profilesShown, conversations: !conversations.ok },
         staffNames,
+        botLinks,
       },
     }
   }
@@ -207,5 +238,6 @@ export async function loadContactPersonCardV1(contactId: string): Promise<Contac
     readDriverProfilesForContacts: readDriverProfilesForContactsV3,
     readContactConversations: contactConversationsV1,
     readStaffDirectory: listUserIdentitiesV1,
+    readBotLinkStatuses: getDriverTelegramLinkStoredStatusesV1,
   })(contactId)
 }

@@ -39,6 +39,10 @@
     {
       "context": "configuration",
       "surface": "configuration.public"
+    },
+    {
+      "context": "telegram_channel",
+      "surface": "telegram_channel.public"
     }
   ],
   "commands": [],

@@ -256,3 +256,39 @@ describe('«История связей» names the employees it shows (Security
     expect(failed.result).toMatchObject({ status: 'confirmed', view: { staffNames: {} } })
   })
 })
+
+describe('«ТГ-бот»: Telegram\'s display-only stored bot-link status', () => {
+  const tgCard = (externalIds: string[]) => card({ channels: [{ channel: 'telegram', accounts: externalIds.map((externalId, i) => ({
+    identityId: `tg-${i}`, externalId, displayName: null, username: null, isActive: true, source: 'auto', origin: 'x', conflictState: 'clear',
+    reachabilityStatus: 'confirmed', reachabilityCheckedAt: null, linkedPhoneId: null, aliasCount: 0, createdAt: '2026-11-01T00:00:00.000Z',
+  })) } as never] })
+
+  async function load(c: unknown, read?: (q: unknown) => Promise<unknown>) {
+    const queries: unknown[] = []
+    const compose = createContactPersonCardCompositionV1({
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: c, licenceView: 'full' } as never },
+      async readDriverProfilesForContacts(query) { return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: (query as { licenceView: 'full' }).licenceView, entries: [] } as never },
+      async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+      ...(read ? { readBotLinkStatuses: async (q: unknown) => { queries.push(q); return read(q) as never } } : {}),
+    })
+    return { result: await compose('c-1'), queries }
+  }
+
+  it('asks only for the person\'s own queryable Telegram ids and keeps only stored / not stored', async () => {
+    const { result, queries } = await load(tgCard(['7001000101', '7001000102', 'not-a-number', '7001000103']), async () => ({
+      byTelegramId: { '7001000101': 'link_stored', '7001000102': 'no_link_stored', '7001000103': 'unknown' }, byDriverId: {},
+    }))
+    expect(queries).toEqual([{ contract: 'telegram.BotLinkStatusQuery.v1', telegramIds: ['7001000101', '7001000102', '7001000103'] }])
+    expect(result).toMatchObject({ status: 'confirmed', view: { botLinks: { '7001000101': 'link_stored', '7001000102': 'no_link_stored' } } })
+    expect((result as { view: { botLinks: Record<string, string> } }).view.botLinks).not.toHaveProperty('7001000103')
+  })
+
+  it('without Telegram accounts nothing is asked; a failed read leaves the column unknown and the card shown', async () => {
+    const none = await load(card(), async () => { throw new Error('should not be asked') })
+    expect(none.queries).toEqual([])
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const failed = await load(tgCard(['7001000101']), async () => { throw new Error('telegram store down') })
+    log.mockRestore()
+    expect(failed.result).toMatchObject({ status: 'confirmed', view: { botLinks: {} } })
+  })
+})
