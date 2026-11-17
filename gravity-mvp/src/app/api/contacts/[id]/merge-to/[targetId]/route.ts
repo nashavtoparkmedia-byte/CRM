@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import { ContactMergeService, MergeError } from '@/lib/ContactMergeService'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -20,15 +20,15 @@ export async function POST(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) {
+  const authority = await resolveContactWriteAuthorityV1()
+  if (authority.decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { id: sourceId, targetId } = await params
 
   try {
-    const result = await ContactMergeService.mergeContactToContact(sourceId, targetId, principal.id)
+    const result = await ContactMergeService.mergeContactToContact(sourceId, targetId, authority.actor)
     return NextResponse.json(result)
   } catch (err: unknown) {
     if (err instanceof MergeError) {

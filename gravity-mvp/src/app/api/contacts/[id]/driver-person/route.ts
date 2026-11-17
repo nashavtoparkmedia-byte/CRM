@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 
 import {
   confirmDriverPersonV1,
@@ -14,7 +15,6 @@ import {
   type ReconciledDriverClusterV1,
 } from '@/modules/fleet-operations/public/v1'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 import { reconcileYandexFleetWithAutomaticMergeV1 } from '@/modules/platform-shell/public/v1'
@@ -56,8 +56,8 @@ export async function POST(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) {
+  const writer = await resolveContactWriteAuthorityV1()
+  if (writer.decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { id: contactId } = await params
@@ -97,7 +97,7 @@ export async function POST(
     contactId,
     profileClusterKey: cluster.profileClusterKey,
     representativeDriverId,
-    confirmedBy: principal.id,
+    confirmedBy: writer.actor,
     confirmationBasis: confirmationBasisFor(searchInput, cluster),
     searchInput,
     evidenceSnapshot: {

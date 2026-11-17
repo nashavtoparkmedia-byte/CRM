@@ -567,3 +567,41 @@ describe('decideContactCommunicationPolicyRecoveryV1', () => {
       .toEqual({ kind: 'blocked', reason: 'communication_policy_evidence_invalid' })
   })
 })
+
+describe('«Ограничения связи» on the person card: a set and a lift over one store (V2 Q4, Security W4)', () => {
+  it('a voice restriction refuses the next call, its lift allows the next one, and the lift is an event like the set', async () => {
+    const { store, handler } = memoryPort()
+    // The permission read every call and send asks, over the same store: no cache between them.
+    const permission = createContactCommunicationPermissionQueryHandlerV1({
+      async readPermissionState(requestedContactId) {
+        const contact = store.contacts.get(requestedContactId)
+        if (!contact) return { kind: 'unknown' }
+        return { kind: 'found', canonicalContactId: requestedContactId, isArchived: contact.isArchived, policy: store.policies.get(requestedContactId) ?? null }
+      },
+    })
+    await expect(permission(query('c1', 'voice'))).resolves.toMatchObject({ decision: 'allow', policyVersion: 0 })
+
+    await expect(handler(setCommand({ requestId: 'card-set', restriction: VOICE, actor: 'staff:u1', reason: 'просил не звонить' })))
+      .resolves.toMatchObject({ status: 'applied', version: 1, restriction: VOICE })
+    await expect(permission(query('c1', 'voice'))).resolves.toMatchObject({ decision: 'deny', reason: 'restricted_voice', policyVersion: 1 })
+    await expect(permission(query('c1', 'message'))).resolves.toMatchObject({ decision: 'allow', policyVersion: 1 })
+
+    await expect(handler(setCommand({ requestId: 'card-lift', expectedVersion: 1, restriction: NONE, actor: 'staff:u2', reason: 'разрешил снова' })))
+      .resolves.toMatchObject({ status: 'applied', version: 2, restriction: NONE })
+    await expect(permission(query('c1', 'voice'))).resolves.toMatchObject({ decision: 'allow', policyVersion: 2 })
+
+    expect(store.events.map(({ cause, version, previousVersion, before, after, actor, reason, mutationRequestId }) => ({ cause, version, previousVersion, before, after, actor, reason, mutationRequestId }))).toEqual([
+      { cause: 'mutation', version: 1, previousVersion: null, before: null, after: VOICE, actor: 'staff:u1', reason: 'просил не звонить', mutationRequestId: 'card-set' },
+      { cause: 'mutation', version: 2, previousVersion: 1, before: VOICE, after: NONE, actor: 'staff:u2', reason: 'разрешил снова', mutationRequestId: 'card-lift' },
+    ])
+  })
+
+  it('a change against a version someone else already moved is refused and writes nothing', async () => {
+    const { store, handler } = memoryPort()
+    await handler(setCommand({ requestId: 'first', restriction: ALL }))
+    await expect(handler(setCommand({ requestId: 'stale', expectedVersion: 0, restriction: NONE })))
+      .resolves.toMatchObject({ status: 'version_conflict', expectedVersion: 0, currentVersion: 1 })
+    expect(store.policies.get('c1')).toEqual({ ...ALL, version: 1 })
+    expect(store.events).toHaveLength(1)
+  })
+})

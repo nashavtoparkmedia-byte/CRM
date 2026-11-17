@@ -336,8 +336,8 @@
         "gravity-mvp/src/store/tasks-store.ts"
       ],
       "current_inventory": {
-        "path_count": 269,
-        "path_sha256": "c827ae039fa41fb49176766544af6f5cb6c9ddd1d6359592da7eebef48334312"
+        "path_count": 273,
+        "path_sha256": "b57ec8aefa3f47e6a87b7582fd543090e6cd18f4951c752f475056ee2996aa79"
       }
     },
     {
@@ -3516,6 +3516,46 @@
       "source_sha256": "1436a179c7fa20120f483d433691c0e6c9e8e0e23be91ddd74763a80097b9424",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review of the Cash referral manager screen admits this exact path, its APPLICATION_RUNTIME lifecycle, the legacy_gravity_runtime owner it shares with the neighbouring compensation routes, its governed exclusion and its byte hash as one indivisible assignment. The client component of the referral screen: two people pickers and a person card, calling only the referral server actions and showing only what they answered. It picks nobody on the manager's behalf, decides nothing and holds no credential."
+    },
+    {
+      "path": "gravity-mvp/src/app/api/contacts/[id]/communication-policy/route.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "0c86ad4f6fec1386fc7ecc7d0e6632999ef77aec1d1f4ee692c5d460c042313c",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Owner's Contact Identity V2 mandate (2026-11-11, P1, design accepted by the Owner 2026-11-13) admits this exact path — the person card's «Ограничения связи» transport: GET answers the canonical Contact's three standing restriction flags and their version under Contacts' read authority; POST sets or lifts them as the complete state with a required reason, the version decided against and a request id, after the same-origin JSON check and Contacts' write authority, recording only the authority's actor, answering a stale version with 409, never cached (Security W4). It is the one admitted adopter of Contacts' policy mutation outside the module, pinned by the communication-policy control. Exclusion gravity_runtime_remainder under the finite legacy_gravity_runtime owner, as its D2 peer POST /contacts/licence-search."
+    },
+    {
+      "path": "gravity-mvp/src/app/api/contacts/[id]/merge-preview/route.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "c27c3f1d3b08b8052178d5565b1700877f3b60ceb669740ad3aa1e81549a3649",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Owner's Contact Identity V2 mandate (2026-11-11, P1, design accepted by the Owner 2026-11-13) admits this exact path — the person card's merge dialog read: which of two Contacts a manual merge would keep and why, by the merge's own survivor policy over the two Contacts as the merge loads them, under Contacts' read authority, never cached; nothing is merged, locked or written. Exclusion gravity_runtime_remainder under the finite legacy_gravity_runtime owner, as its D2 peer POST /contacts/licence-search."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/[id]/PersonCardClient.tsx",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "97a13c822b6a59a3b3cee386bacf10d708c80139551dcd0531f645f38402bb64",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Owner's Contact Identity V2 mandate (2026-11-11, P1, design accepted by the Owner 2026-11-13) admits this exact path — the client part of the person card: the «Мессенджеры» table (Написать, Проверить by ids only) and block 3 (merge with its preview, add a number, link the Yandex profile, open in messages, «Ограничения связи»). Every action calls an existing operation that answers under its own authority; this file decides nothing about who a person is. Exclusion gravity_runtime_remainder under the finite legacy_gravity_runtime owner, as its D2 peer POST /contacts/licence-search."
+    },
+    {
+      "path": "gravity-mvp/src/app/contacts/[id]/reachability/route.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "legacy_gravity_runtime",
+      "exclusion": "gravity_runtime_remainder",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "0e5bbbd277a2985b15c0a6473c0353f3813c608258800c65030ac00c654eba22",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review under the Owner's Contact Identity V2 mandate (2026-11-11, P1, design accepted by the Owner 2026-11-13) admits this exact path — the person card's «Проверить» transport (beside the card page, because Contacts may not import Messaging): the same-origin JSON check, then Contacts' write authority, then a channel and this Contact's own phone and/or account ids; a raw phone is refused; Contacts resolves the stored number and exact binding and Messaging's one channel check runs behind each lane's live guard; the answer is the reachability state only, never the number (Security W5, MSR review). Exclusion gravity_runtime_remainder under the finite legacy_gravity_runtime owner, as its D2 peer POST /contacts/licence-search."
     }
   ]
 }

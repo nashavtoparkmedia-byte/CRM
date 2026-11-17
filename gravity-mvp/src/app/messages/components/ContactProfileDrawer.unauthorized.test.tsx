@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * GET /api/contacts/:id answers only a verified staff or integration-admin
  * session (Security 2026-11-12). Without one it answers 401, and the Messages
  * contact panel must say so instead of going blank: useContact reports
- * `unauthorized` (no retry), and the drawer shows one line with «Войти».
+ * `unauthorized` (no retry), and the drawer shows one line naming both sign-ins.
  */
 
 const navigation = vi.hoisted(() => ({ toggleProfileDrawer: vi.fn(), updateQuery: vi.fn() }))
@@ -69,10 +69,12 @@ describe('useContact on a refused contact read', () => {
 })
 
 describe('ContactProfileDrawer without a verified session', () => {
-  it('shows one sign-in line with a «Войти» link instead of the panel, after a single read', async () => {
+  it('shows one sign-in line naming both sign-ins instead of the panel, after a single read', async () => {
     render(<ContactProfileDrawer chatId="chat-1" />)
-    expect(await screen.findByText(/Чтобы видеть данные человека, войдите в CRM со своим паролем/u)).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'Войти' }).getAttribute('href')).toBe('/login')
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Чтобы видеть данные человека, войдите в CRM со своим паролем или через «Доступ к интеграциям».')
+    // Both doors: on a stand without personal passwords /login alone would loop.
+    expect(screen.getByRole('link', { name: 'со своим паролем' }).getAttribute('href')).toBe('/login')
+    expect(screen.getByRole('link', { name: '«Доступ к интеграциям»' }).getAttribute('href')).toBe('/settings/integrations/access?next=%2Fmessages')
     expect(contactCalls()).toBe(1)
   })
 })

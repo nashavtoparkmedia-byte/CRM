@@ -86,6 +86,48 @@ export type ContactPersonCardMergeEventV1 = {
   survivorContactId: string
 }
 
+/**
+ * Who stored a link change, as the stored actor says. Only these kinds cross:
+ * a free-text actor never reaches a page. 'staff' carries the employee's IA user
+ * id (the page resolves a name through Identity Access under the read authority);
+ * the transitional integration-admin session and automatic operations are named
+ * as such; anything else is 'unknown'.
+ */
+export type ContactPersonCardActorV1 =
+  | { kind: 'staff'; userId: string }
+  | { kind: 'integration_admin' }
+  | { kind: 'system' }
+  | { kind: 'unknown' }
+
+export type ContactPersonCardLinkEventKindV1 =
+  | 'contacts_merged'
+  | 'contacts_unmerged'
+  | 'merge_recovered'
+  | 'phone_added_or_verified'
+  | 'phone_made_primary'
+  | 'phone_removed'
+  | 'phone_state_changed'
+  | 'identity_attached_to_phone'
+  | 'driver_profile_confirmed'
+  | 'communication_policy_changed'
+
+/**
+ * One stored change of this person's links, projected from a record that was
+ * written when it happened (ContactMerge, the phone evidence audit trail, the
+ * driver-person confirmations, ContactCommunicationPolicyEvent). Nothing is
+ * derived from the current state, and an event a record does not hold is absent.
+ */
+export type ContactPersonCardLinkEventV1 = {
+  kind: ContactPersonCardLinkEventKindV1
+  at: string
+  /** The affected phone (E.164) when the record names one; otherwise null. */
+  subject: string | null
+  /** A closed detail code: the restriction now in force for a policy event, the confirmation status for a driver event. */
+  detail: string | null
+  mode: 'manual' | 'automatic' | 'unknown'
+  actor: ContactPersonCardActorV1
+}
+
 export type ContactPersonCardLineageV1 = {
   canonicalContactId: string
   /** The canonical id and every id merged into it, sorted. */
@@ -139,6 +181,8 @@ export type ContactPersonCardV1 = {
   candidates: ContactPersonCardCandidateV1[]
   automation: { doNotMerge: boolean; canonicalPinned: boolean; mergeRecoveryState: string | null }
   isArchived: boolean
+  /** Stored link changes of the lineage, newest first, at most 50. */
+  linkHistory: ContactPersonCardLinkEventV1[]
 }
 
 /**

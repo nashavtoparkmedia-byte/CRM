@@ -238,6 +238,7 @@ export function useContact(contactId: string | null | undefined) {
 
         setIsLoading(true)
         setError(null)
+        setUnauthorized(false)
 
         fetch(`/api/contacts/${contactId}`, { signal: controller.signal })
             .then(res => {

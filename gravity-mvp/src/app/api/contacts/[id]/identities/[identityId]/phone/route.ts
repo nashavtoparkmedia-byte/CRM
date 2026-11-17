@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { manageContactPhoneEvidenceV1 } from '@/modules/contacts/public/v1'
+import { manageContactPhoneEvidenceV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -13,8 +12,8 @@ export async function POST(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) {
+  const authority = await resolveContactWriteAuthorityV1()
+  if (authority.decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -27,7 +26,7 @@ export async function POST(
       contactId,
       identityId,
       phoneId: body.phoneId,
-      actor: principal.id,
+      actor: authority.actor,
       basis: body.basis || 'manual identity-phone association',
     })
     return NextResponse.json(result)

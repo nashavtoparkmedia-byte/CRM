@@ -340,6 +340,15 @@ function makeSnapshot(
 ): ContactMergeSnapshotV1 {
   return { ...makeSnapshotBase(source), survivorBefore: makeSnapshotBase(survivor) }
 }
+/**
+ * The survivor of a manual contact-to-contact merge: the one policy both the
+ * merge itself and the card's read-only merge preview apply, so the preview can
+ * never name a survivor the merge would not choose.
+ */
+export function evaluateManualMergeSurvivorV1(source: ContactMergeSourceV1, target: ContactMergeSourceV1) {
+  return evaluateContactSurvivorV1(automationSnapshot(source), automationSnapshot(target))
+}
+
 function automationSnapshot(contact: ContactMergeSourceV1): ContactAutomationSnapshotV1 {
   const customFields = contact.customFields && typeof contact.customFields === 'object' && !Array.isArray(contact.customFields)
     ? contact.customFields as Record<string, unknown>
@@ -672,7 +681,7 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
         }
         throw new ContactMergeErrorV1('SURVIVOR_ARCHIVED', `Target contact ${parsed.targetId} is archived`)
       }
-      let evaluation = evaluateContactSurvivorV1(automationSnapshot(source), automationSnapshot(target))
+      let evaluation = evaluateManualMergeSurvivorV1(source, target)
       let automationEvidenceRoots: string[] = []
       if (parsed.automation) {
         // Caller evidence is only a request to attempt automation. Authority is

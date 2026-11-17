@@ -21,6 +21,8 @@ export type { FindDriverByExactPhonePersistencePortV1 } from './find-driver-by-e
 export { createDriverProfilesForContactsHandlerV1, projectDriverProfileForContactV1 } from './driver-profiles-for-contacts-handler'
 export type { DriverProfileRowV1, DriverProfilesForContactsPersistencePortV1 } from './driver-profiles-for-contacts-handler'
 export { createDriverProfilesForContactsHandlerV2 } from './driver-profiles-for-contacts-v2-handler'
+export { createDriverProfilesForContactsHandlerV3 } from './driver-profiles-for-contacts-v3-handler'
+export type { DriverCardFieldsReadPortV1, DriverCardFieldsRowV1 } from './driver-card-fields-read-port'
 export { createDriverProfilesByExactLicenceHandlerV1 } from './driver-profiles-by-exact-licence-handler'
 export type { DriverLicenceProfileRowV1, DriverLicenceReadPortV1 } from './driver-licence-read-port'
 export { DRIVER_LICENCE_MASK_V1, maskDriverLicenceV1 } from './driver-licence-mask'
@@ -72,6 +74,7 @@ export {
     findDriverByExactPhoneV1,
     readDriverProfilesForContactsV1,
     readDriverProfilesForContactsV2,
+    readDriverProfilesForContactsV3,
     findDriverProfilesByExactLicenceV1,
     getDriverCallablePhoneV1,
     searchLocalDriversV1,

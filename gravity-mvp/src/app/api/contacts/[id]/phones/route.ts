@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
-import { contactOwnershipBusyResultV1, manageContactPhoneEvidenceV1 } from '@/modules/contacts/public/v1'
+import { contactOwnershipBusyResultV1, manageContactPhoneEvidenceV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -33,8 +32,8 @@ export async function POST(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) {
+  const authority = await resolveContactWriteAuthorityV1()
+  if (authority.decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -56,7 +55,7 @@ export async function POST(
       operation: 'add_or_verify',
       contactId: id,
       rawPhone,
-      actor: principal.id,
+      actor: authority.actor,
       basis: String(basis || 'manual phone management'),
       makePrimary: isPrimary === true,
       resolutionState: ['unique', 'shared', 'disputed'].includes(resolutionState)

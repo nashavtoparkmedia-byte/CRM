@@ -47,6 +47,7 @@ function card(overrides: Partial<ContactPersonCardV1> = {}): ContactPersonCardV1
     candidates: [],
     automation: { doNotMerge: false, canonicalPinned: false, mergeRecoveryState: null },
     isArchived: false,
+    linkHistory: [],
     ...overrides,
   }
 }

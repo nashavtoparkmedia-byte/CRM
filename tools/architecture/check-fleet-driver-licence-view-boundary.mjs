@@ -13,7 +13,11 @@
 //    with the parsed view, and the v2 handler reuses v1's read unchanged;
 // 4. the one reader of the stored licence is read-only, parameterized and
 //    touches Fleet-owned Driver and Park rows only;
-// 5. the bindings, the public surface and the declarations are in place.
+// 5. the bindings, the public surface and the declarations are in place;
+// 6. DriverProfilesForContactsQuery.v3 is v2 plus exactly the profile's phone,
+//    self-employment flag and employment code: it reuses v2's read unchanged,
+//    narrows the employment to its allowlist, and its one reader selects only
+//    those Fleet-owned Driver columns.
 // Each rule is checked against known mutants, which must all be caught, and
 // then the proofs run.
 import assert from 'node:assert/strict'
@@ -39,9 +43,14 @@ const APPLICATION = 'gravity-mvp/src/modules/fleet-operations/application/fleet-
 const PUBLIC_INDEX = 'gravity-mvp/src/modules/fleet-operations/public/v1/index.ts'
 const MANIFEST = 'architecture/contexts/v1/manifests/fleet_operations.json'
 const REGISTRY = 'architecture/contracts/v1/registry.json'
-const CAPABILITIES = ['DriverProfilesForContactsQuery.v2', 'DriverProfilesByExactLicenceQuery.v1']
+const V3_CONTRACT = 'gravity-mvp/src/contracts/fleet-operations/v3/driver-profiles-for-contacts-query.ts'
+const V3_INDEX = 'gravity-mvp/src/contracts/fleet-operations/v3/index.ts'
+const V3_HANDLER = 'gravity-mvp/src/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v3-handler.ts'
+const CARD_PORT = 'gravity-mvp/src/modules/fleet-operations/public/v1/driver-card-fields-read-port.ts'
+const CARD_ADAPTER = 'gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-card-fields-adapter.ts'
+const CAPABILITIES = ['DriverProfilesForContactsQuery.v2', 'DriverProfilesByExactLicenceQuery.v1', 'DriverProfilesForContactsQuery.v3']
 const CONTROL = 'node tools/architecture/check-fleet-driver-licence-view-boundary.mjs'
-const LICENCE_FILES = [VIEW, EXACT_CONTRACT, V2_CONTRACT, MASK, PORT, ADAPTER, V2_HANDLER, EXACT_HANDLER]
+const LICENCE_FILES = [VIEW, EXACT_CONTRACT, V2_CONTRACT, MASK, PORT, ADAPTER, V2_HANDLER, EXACT_HANDLER, V3_CONTRACT, V3_HANDLER, CARD_PORT, CARD_ADAPTER]
 
 const WRITE_VOCABULARY = /\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(|\$executeRaw|Unsafe\b|\$transaction/u
 const FOREIGN_TABLES = /\bprisma\.(contact|contactIdentity|contactPhone|contactMerge|chat|message|telegram\w*|whatsApp\w*|max\w*|user|crmUser)\b|"(Contact|ContactIdentity|ContactPhone|Chat|Message|User)"/u
@@ -117,7 +126,7 @@ function assertMask(read) {
   assert(mask.includes('DRIVER_LICENCE_MIN_MASKABLE_LENGTH_V1 = 8'), 'the maskable length changed')
   assert(mask.includes("value.toUpperCase().replace(/[^0-9A-ZА-ЯЁ]/gu, '')"), 'the licence key changed')
   assert(!/'last4'/u.test(mask), 'the mask branches on last4 instead of failing closed')
-  for (const file of [V2_HANDLER, EXACT_HANDLER, ADAPTER, PORT]) {
+  for (const file of [V2_HANDLER, EXACT_HANDLER, ADAPTER, PORT, V3_HANDLER, CARD_ADAPTER, CARD_PORT]) {
     const source = withoutComments(read(file))
     assert(!/'full'|'last4'/u.test(source), `${path.basename(file)} names a licence view; only the mask may`)
   }
@@ -187,7 +196,43 @@ function assertDeclarations(read) {
   assert(manifest.verification.module_tests.includes(CONTROL), 'the control is not a declared module test')
 }
 
+/** 6. v3 = v2 plus the phone and the narrowed employment, from one exact read. */
+function assertCardFields(read) {
+  const v3 = withoutComments(read(V3_CONTRACT))
+  assert(v3.includes("DRIVER_PROFILES_FOR_CONTACTS_QUERY_V3 = 'fleet_operations.DriverProfilesForContactsQuery.v3' as const"), 'the v3 query id changed')
+  assert(v3.includes("export const DRIVER_EMPLOYMENT_TYPES_V3 = ['park_employee', 'selfemployed', 'individual_entrepreneur', 'unknown'] as const"), 'the employment codes changed')
+  assert(v3.includes("(DRIVER_EMPLOYMENT_TYPES_V3 as readonly string[]).includes(stored) && stored !== 'unknown'\n    ? (stored as DriverEmploymentTypeV3)\n    : 'unknown'"), 'an unlisted employment value is passed on')
+  assert.deepEqual(fieldNames(interfaceBody(v3, 'export interface DriverProfilesForContactsQueryV3 {')), ['contract', 'licenceView', 'subjects'], 'the v3 query shape changed')
+  assert.deepEqual(fieldNames(interfaceBody(v3, 'export interface DriverProfileForContactV3 extends DriverProfileForContactV2 {')), ['employmentType', 'isSelfEmployed', 'phone'], 'v3 adds more than the phone and the employment to the v2 profile')
+  assert.deepEqual(fieldNames(interfaceBody(v3, 'export interface DriverProfilesForContactsResultV3 {')), ['contract', 'entries', 'licenceView'], 'the v3 answer shape changed')
+  assert(v3.includes('parseDriverProfilesForContactsQueryV2({ ...input, contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2 })'), 'the v3 query is not checked by the v2 parser')
+  assert(!/\$\{\s*input\./u.test(v3), 'the v3 parser interpolates the input')
+  assert(read(V3_INDEX).includes("export * from './driver-profiles-for-contacts-query'"), 'the v3 contract is not exported')
+
+  const handler = withoutComments(read(V3_HANDLER))
+  const parseAt = handler.indexOf('const parsed = parseDriverProfilesForContactsQueryV3(query)')
+  const v2At = handler.indexOf('await readV2({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2, licenceView: parsed.licenceView, subjects: parsed.subjects })')
+  const fieldsAt = handler.indexOf('await cardFields.findCardFieldsOfDrivers(driverIds)')
+  assert(parseAt >= 0 && v2At > parseAt && fieldsAt > v2At, 'the v3 handler reads before it parses, or not through v2')
+  assert(handler.includes('employmentType: driverEmploymentTypeV3(fields?.employmentType ?? null),'), 'the employment is not narrowed to its codes')
+  assert(handler.includes("isSelfEmployed: typeof fields?.isSelfEmployed === 'boolean' ? fields.isSelfEmployed : null,"), 'a non-boolean flag is passed on')
+  assert(!/licence:|licenseNumber|maskDriverLicenceV1|prisma|\$queryRaw/u.test(handler), 'the v3 handler touches the licence or the database itself')
+  assert(!LIVE_VOCABULARY.test(handler) && !WRITE_VOCABULARY.test(handler), 'the v3 handler reaches a park or writes')
+
+  const adapter = withoutComments(read(CARD_ADAPTER))
+  assert.equal(count(adapter, 'prisma.'), 1, 'the card-fields reader makes more than its one read')
+  assert(adapter.includes('where: { id: { in: [...driverIds] } },\n      select: { id: true, phone: true, isSelfEmployed: true, employmentType: true },\n      take: 500,'), 'the card-fields read is not exactly the three columns of the asked drivers')
+  assert(!/licenseNumber|externalPersonKey|\$queryRaw|Unsafe/u.test(adapter), 'the card-fields reader reads the licence, a person key or raw SQL')
+  assert(!FOREIGN_TABLES.test(adapter) && !WRITE_VOCABULARY.test(adapter), 'the card-fields reader touches a foreign table or writes')
+
+  const application = read(APPLICATION)
+  assert(application.includes('createDriverProfilesForContactsHandlerV3(readDriverProfilesForContactsLicenced, legacyPrismaDriverCardFieldsPortV1)'), 'v3 is not bound to the v2 read and the card-fields reader')
+  assert(read(PUBLIC_INDEX).includes('readDriverProfilesForContactsV3,'), 'v3 is not on the Fleet public surface')
+  assert(!/legacy-prisma-driver-card-fields-adapter/u.test(read(PUBLIC_INDEX)), 'the card-fields reader leaks onto the public surface')
+}
+
 function assertAll(read) {
+  assertCardFields(read)
   assertContracts(read)
   assertMask(read)
   assertHandlers(read)
@@ -221,6 +266,14 @@ const MUTANTS = [
   [ADAPTER, 'LIMIT ${limit}`', '`'],
   [ADAPTER, 'd."licenseNumber", d."dismissedAt"', 'd."licenseNumber", d."dismissedAt", d."phone"'],
   [APPLICATION, 'createDriverProfilesByExactLicenceHandlerV1(legacyPrismaDriverLicencePortV1)', 'createDriverProfilesByExactLicenceHandlerV1({ findProfilesByLicenceKey: async () => [] })'],
+  [V3_CONTRACT, "['park_employee', 'selfemployed', 'individual_entrepreneur', 'unknown'] as const", "['park_employee', 'selfemployed', 'individual_entrepreneur', 'partner', 'unknown'] as const"],
+  [V3_CONTRACT, "&& stored !== 'unknown'\n    ? (stored as DriverEmploymentTypeV3)\n    : 'unknown'", "\n    ? (stored as DriverEmploymentTypeV3)\n    : (stored as DriverEmploymentTypeV3)"],
+  [V3_CONTRACT, '  phone: string | null\n  isSelfEmployed', '  phone: string | null\n  licenseNumber: string | null\n  isSelfEmployed'],
+  [V3_HANDLER, 'employmentType: driverEmploymentTypeV3(fields?.employmentType ?? null),', 'employmentType: (fields?.employmentType ?? null) as never,'],
+  [V3_HANDLER, "isSelfEmployed: typeof fields?.isSelfEmployed === 'boolean' ? fields.isSelfEmployed : null,", 'isSelfEmployed: (fields?.isSelfEmployed ?? null) as never,'],
+  [V3_HANDLER, 'licenceView: parsed.licenceView, subjects: parsed.subjects })', "licenceView: 'full', subjects: parsed.subjects })"],
+  [CARD_ADAPTER, 'select: { id: true, phone: true, isSelfEmployed: true, employmentType: true },', 'select: { id: true, phone: true, isSelfEmployed: true, employmentType: true, licenseNumber: true },'],
+  [CARD_ADAPTER, '      take: 500,\n', ''],
   [PUBLIC_INDEX, "export { DRIVER_LICENCE_MASK_V1, maskDriverLicenceV1 } from './driver-licence-mask'", "export { DRIVER_LICENCE_MASK_V1, driverLicenceKeyV1, maskDriverLicenceV1 } from './driver-licence-mask'"],
 ]
 
@@ -249,6 +302,8 @@ function runProofs() {
     'src/modules/fleet-operations/public/v1/driver-licence-mask.test.ts',
     'src/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v2-handler.test.ts',
     'src/modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler.test.ts',
+    'src/contracts/fleet-operations/v3/driver-profiles-for-contacts-query.test.ts',
+    'src/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v3-handler.test.ts',
   ], { cwd: path.join(root, 'gravity-mvp'), encoding: 'utf8', env: { ...process.env, CI: '1' } })
   assert.equal(vitest.status, 0, `the Fleet licence view proofs failed:\n${vitest.stdout}\n${vitest.stderr}`)
   const passed = passingProofCount(vitest.stdout)

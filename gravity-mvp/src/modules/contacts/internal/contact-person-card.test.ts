@@ -36,10 +36,11 @@ function source(overrides: Partial<ContactPersonCardSourceV1> = {}): ContactPers
     ],
     lineage: { canonicalContactId: 'c-1', contactIds: ['c-1', 'c-old'] },
     merges: [
-      { id: 'm-1', action: 'merge', reason: 'phone_match', mergedBy: 'system', createdAt: T1, mergedId: 'c-old', survivorId: 'c-1' },
-      { id: 'm-0', action: 'unmerge', reason: 'undo', mergedBy: 'admin', createdAt: T0, mergedId: 'c-x', survivorId: 'c-1' },
-      { id: 'm-9', action: 'merge', reason: 'manual', mergedBy: 'admin', createdAt: T2, mergedId: 'c-unrelated', survivorId: 'c-other' },
+      { id: 'm-1', action: 'merge', reason: 'phone_match', mergedBy: 'system', createdAt: T1, mergedId: 'c-old', survivorId: 'c-1', automated: true, recoveryState: null, recoveredAt: null },
+      { id: 'm-0', action: 'unmerge', reason: 'undo', mergedBy: 'admin', createdAt: T0, mergedId: 'c-x', survivorId: 'c-1', automated: null, recoveryState: null, recoveredAt: null },
+      { id: 'm-9', action: 'merge', reason: 'manual', mergedBy: 'admin', createdAt: T2, mergedId: 'c-unrelated', survivorId: 'c-other', automated: false, recoveryState: null, recoveredAt: null },
     ],
+    policyEvents: [],
     ...overrides,
   }
 }
@@ -200,3 +201,56 @@ describe('readContactPersonCardV1', () => {
     expect(result.card.isArchived).toBe(false)
   })
 })
+
+describe('the link history (V2 block «История связей»)', () => {
+  it('projects only stored records: merges with their manual/auto flag, the phone audit trail, confirmations and policy events', () => {
+    const card = buildContactPersonCardV1(source({
+      customFields: {
+        phoneEvidenceByPhoneId: {
+          'p-1': { auditTrail: [
+            { id: 'a1', actor: 'identity-access:integration-admin-session', action: 'add_or_verify', afterState: { lifecycle: 'current', isPrimary: false }, beforeState: null, createdAt: '2026-04-01T10:00:00.000Z' },
+            { id: 'a2', actor: 'staff:user-7', action: 'set_state', beforeState: { isPrimary: false }, afterState: { lifecycle: 'current', isPrimary: true }, createdAt: '2026-04-02T10:00:00.000Z' },
+            { id: 'a3', actor: 'system:provider-confirmation', action: 'attach_identity', afterState: {}, beforeState: {}, createdAt: '2026-04-03T10:00:00.000Z' },
+          ] },
+          'p-2': { auditTrail: [
+            { id: 'a4', actor: 'Иван Петров, не системный', action: 'set_state', beforeState: { lifecycle: 'current' }, afterState: { lifecycle: 'removed' }, createdAt: '2026-04-04T10:00:00.000Z' },
+            { id: 'a5', actor: 'staff:user-7', action: 'unknown_action', createdAt: '2026-04-05T10:00:00.000Z' },
+            { id: 'a6', actor: 'staff:user-7', action: 'add_or_verify', createdAt: 'not a date' },
+          ] },
+        },
+        driverConfirmations: [
+          { id: 'dc1', status: 'confirmed', confirmedBy: 'identity-access:integration-admin-session', confirmedAt: '2026-04-06T10:00:00.000Z', searchInput: 'Иванов', evidenceSnapshot: { secret: 1 } },
+        ],
+      },
+      policyEvents: [
+        { eventId: 'e1', cause: 'set', actor: 'staff:user-9', recordedAt: '2026-04-07T10:00:00.000Z', afterDenyAll: false, afterDenyMessage: false, afterDenyVoice: true },
+      ],
+    }))
+    expect(card.linkHistory).toEqual([
+      { kind: 'communication_policy_changed', at: '2026-04-07T10:00:00.000Z', subject: null, detail: 'deny_voice', mode: 'manual', actor: { kind: 'staff', userId: 'user-9' } },
+      { kind: 'driver_profile_confirmed', at: '2026-04-06T10:00:00.000Z', subject: null, detail: 'confirmed', mode: 'manual', actor: { kind: 'integration_admin' } },
+      { kind: 'phone_removed', at: '2026-04-04T10:00:00.000Z', subject: '+79990000002', detail: null, mode: 'unknown', actor: { kind: 'unknown' } },
+      { kind: 'identity_attached_to_phone', at: '2026-04-03T10:00:00.000Z', subject: '+79990000001', detail: null, mode: 'automatic', actor: { kind: 'system' } },
+      { kind: 'phone_made_primary', at: '2026-04-02T10:00:00.000Z', subject: '+79990000001', detail: null, mode: 'manual', actor: { kind: 'staff', userId: 'user-7' } },
+      { kind: 'phone_added_or_verified', at: '2026-04-01T10:00:00.000Z', subject: '+79990000001', detail: null, mode: 'manual', actor: { kind: 'integration_admin' } },
+      { kind: 'contacts_merged', at: T1, subject: null, detail: null, mode: 'automatic', actor: { kind: 'unknown' } },
+      { kind: 'contacts_unmerged', at: T0, subject: null, detail: null, mode: 'unknown', actor: { kind: 'unknown' } },
+    ])
+    // No free-text actor, search input or evidence snapshot crosses.
+    const serialized = JSON.stringify(card.linkHistory)
+    for (const leaked of ['Иван Петров', 'Иванов', 'secret', 'unknown_action']) expect(serialized).not.toContain(leaked)
+  })
+
+  it('shows a recovery only when the merge record says it was recovered', () => {
+    const card = buildContactPersonCardV1(source({
+      merges: [{ id: 'm-r', action: 'merge', reason: 'manual', mergedBy: 'system:auto-merge', createdAt: T1, mergedId: 'c-old', survivorId: 'c-1', automated: true, recoveryState: 'recovered', recoveredAt: T2 }],
+    }))
+    expect(card.linkHistory.map(event => [event.kind, event.at, event.mode])).toEqual([['merge_recovered', T2, 'unknown'], ['contacts_merged', T1, 'automatic']])
+  })
+
+  it('has no events when nothing was recorded, whatever the current state holds', () => {
+    const card = buildContactPersonCardV1(source({ merges: [], policyEvents: [] }))
+    expect(card.linkHistory).toEqual([])
+  })
+})
+

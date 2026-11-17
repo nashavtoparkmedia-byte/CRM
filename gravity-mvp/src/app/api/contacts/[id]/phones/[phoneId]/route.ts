@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { contactOwnershipBusyResultV1, manageContactPhoneEvidenceV1 } from '@/modules/contacts/public/v1'
+import { contactOwnershipBusyResultV1, manageContactPhoneEvidenceV1, resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -33,8 +32,8 @@ export async function DELETE(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) {
+  const authority = await resolveContactWriteAuthorityV1()
+  if (authority.decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -45,7 +44,7 @@ export async function DELETE(
       operation: 'set_state',
       contactId,
       phoneId,
-      actor: principal.id,
+      actor: authority.actor,
       basis: 'manual removal',
       lifecycle: 'removed',
       freshness: 'stale',
@@ -70,8 +69,8 @@ export async function PATCH(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) {
+  const authority = await resolveContactWriteAuthorityV1()
+  if (authority.decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -83,7 +82,7 @@ export async function PATCH(
       operation: 'set_state',
       contactId,
       phoneId,
-      actor: principal.id,
+      actor: authority.actor,
       basis: String(body.basis || 'manual phone update'),
       ...(typeof body.lifecycle === 'string' ? { lifecycle: body.lifecycle } : {}),
       ...(typeof body.freshness === 'string' ? { freshness: body.freshness } : {}),

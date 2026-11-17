@@ -192,15 +192,34 @@ function assertComposition(read = readRepo) {
   // and a Fleet answer for another view or with an unmasked ВУ is never shown.
   order(composition, [
     "const licenceView = answer.licenceView === 'full' ? 'full' : 'last4'",
-    'deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V2, licenceView, subjects })',
+    'deps.readDriverProfilesForContacts({ contract: DRIVER_PROFILES_FOR_CONTACTS_QUERY_V3, licenceView, subjects })',
     '&& profiles.value.licenceView === licenceView',
     '&& profiles.value.entries.every(entry => entry.profiles.every(profile => maskedForView(profile.licence, licenceView)))',
     'if (profiles.ok && profilesShown) {',
     'partial: { driverProfiles: !profilesShown,',
   ], 'the composition ВУ view')
   assert(composition.includes("return licenceView === 'full' || licence === null || licence.startsWith(DRIVER_LICENCE_MASK_V1)"), 'the composition no longer checks Fleet\'s mask for a last-4 reader')
-  assert(composition.includes('readDriverProfilesForContacts: readDriverProfilesForContactsV2,'), 'the card is not bound to Fleet\'s masked v2 read')
+  assert(composition.includes('readDriverProfilesForContacts: readDriverProfilesForContactsV3,'), 'the card is not bound to Fleet\'s v3 read (masked ВУ, profile phone and employment)')
   assert(!composition.includes('readDriverProfilesForContactsV1'), 'the card still reads Fleet\'s v1 profiles')
+  // Security W8: the directory is read only after Contacts confirmed, only when the
+  // history names an employee, and answers names of exactly those employees.
+  order(composition, [
+    "if (answer.status !== 'confirmed') return { status: answer.status }",
+    "const staffIds = [...new Set(card.linkHistory.flatMap(event => (event.actor.kind === 'staff' ? [event.actor.userId] : [])))]",
+    'staffIds.length === 0 || deps.readStaffDirectory === undefined',
+    'settle(deps.readStaffDirectory)',
+    'if (!staffIds.includes(user.id)) continue',
+  ], 'the composition staff names')
+  assert(composition.includes('readStaffDirectory: listUserIdentitiesV1,'), 'the staff names are not bound to Identity Access\'s directory')
+  // «ТГ-бот»: Telegram's display-only read, after Contacts confirmed, with exactly the person's own Telegram account ids.
+  order(composition, [
+    "if (answer.status !== 'confirmed') return { status: answer.status }",
+    ".filter(channel => channel.channel === 'telegram')",
+    '.filter(isQueryableTelegramUserIdV1))].slice(0, BOT_LINK_STATUS_MAX_IDS_V1)',
+    'telegramIds.length === 0 || deps.readBotLinkStatuses === undefined',
+    'deps.readBotLinkStatuses!({ contract: BOT_LINK_STATUS_QUERY_V1, telegramIds })',
+  ], 'the composition bot links')
+  assert(composition.includes('readBotLinkStatuses: getDriverTelegramLinkStoredStatusesV1,'), 'the bot column is not bound to Telegram\'s BotLinkStatusQuery.v1')
   const page = withoutComments(read(PAGE))
   assert(page.includes("if (result.status === 'redirected') redirect("), 'a merged-away id is no longer followed to its canonical Contact')
   assert(page.includes("if (result.status === 'missing') notFound()"), 'a missing Contact is no longer a 404')
@@ -281,7 +300,10 @@ const MUTANTS = [
   [COMPOSITION, "const licenceView = answer.licenceView === 'full' ? 'full' : 'last4'", "const licenceView = answer.licenceView ?? 'full'"],
   [COMPOSITION, '&& profiles.value.licenceView === licenceView', ''],
   [COMPOSITION, "return licenceView === 'full' || licence === null || licence.startsWith(DRIVER_LICENCE_MASK_V1)", 'return true'],
-  [COMPOSITION, 'readDriverProfilesForContacts: readDriverProfilesForContactsV2,', 'readDriverProfilesForContacts: readDriverProfilesForContactsV1,'],
+  [COMPOSITION, 'readDriverProfilesForContacts: readDriverProfilesForContactsV3,', 'readDriverProfilesForContacts: readDriverProfilesForContactsV1,'],
+  [COMPOSITION, '        if (!staffIds.includes(user.id)) continue\n', ''],
+  [COMPOSITION, 'staffIds.length === 0 || deps.readStaffDirectory === undefined', 'deps.readStaffDirectory === undefined'],
+  [COMPOSITION, "      .filter(channel => channel.channel === 'telegram')\n", ''],
   [LICENCE_SEARCH, "const licenceView = authority.licenceView === 'full' ? 'full' : 'last4'", "const licenceView = authority.licenceView ?? 'full'"],
   [LICENCE_SEARCH, "if (authority.decision !== 'allow') return { status: 'denied' }", ''],
   [LICENCE_SEARCH, 'if (!answer.profiles.every(profile => maskedForView(profile.licence, licenceView))) {', 'if (false) {'],

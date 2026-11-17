@@ -14,7 +14,7 @@ import CallButton from "@/modules/calling/public/v1/client-ui/CallButton"
 import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
 import ContactResolutionAmbiguityBanner from './ContactResolutionAmbiguityBanner'
 import LinkContactModal from './LinkContactModal'
-import DriverPersonSearchModal from './DriverPersonSearchModal'
+import DriverPersonSearchModal from '@/modules/contacts/public/v1/client-ui/DriverPersonSearchModal'
 import ContactEvidenceDetails from './ContactEvidenceDetails'
 import { resolveContactPersonCardLinkAction } from '../contact-card-link-actions'
 import { personCardLinkChatIdV1, selectDisplayedChatV1 } from '../hooks/displayed-chat'
@@ -641,8 +641,11 @@ export default function ContactProfileDrawer({ chatId, activeChannelTab = 'all' 
                     </button>
                 </div>
                 <div className="px-3 py-4 text-[13px] text-[#111]" role="status">
-                    Чтобы видеть данные человека, войдите в CRM со своим паролем.{' '}
-                    <a href="/login" className="font-semibold text-[#3390EC]">Войти</a>
+                    {/* Both doors: on a stand without personal passwords /login is only the
+                        employee picker, which grants no read (Owner acceptance, 2026-11-12). */}
+                    Чтобы видеть данные человека, войдите в CRM{' '}
+                    <a href="/login" className="font-semibold text-[#3390EC]">со своим паролем</a>{' '}или через{' '}
+                    <a href="/settings/integrations/access?next=%2Fmessages" className="font-semibold text-[#3390EC]">«Доступ к интеграциям»</a>.
                 </div>
             </div>
         )

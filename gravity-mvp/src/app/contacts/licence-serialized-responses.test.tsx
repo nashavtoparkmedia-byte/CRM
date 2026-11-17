@@ -18,6 +18,12 @@ const KEY = '9912345678'
 
 const fixture = vi.hoisted(() => ({ role: 'Менеджер', fleetFails: false, fleetReads: 0 }))
 
+// The card's client parts (V2) use the App Router; render them outside it.
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/navigation')>()),
+  useRouter: () => ({ push: () => undefined, refresh: () => undefined, replace: () => undefined, back: () => undefined, forward: () => undefined, prefetch: () => undefined }),
+}))
+
 vi.mock('@/modules/platform-shell/public/v1', async () => {
   const { CONTACT_PERSON_CARD_RESULT_V1 } = await import('@/contracts/contacts/v1')
   const { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V1 } = await import('@/contracts/fleet-operations/v1')
@@ -26,6 +32,7 @@ vi.mock('@/modules/platform-shell/public/v1', async () => {
   const { createContactPersonCardCompositionV1 } = await import('@/modules/platform-shell/application/contact-person-card-composition')
   const { createContactLicenceSearchCompositionV1 } = await import('@/modules/platform-shell/application/contact-licence-search-composition')
   const { createDriverProfilesForContactsHandlerV2 } = await import('@/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v2-handler')
+  const { createDriverProfilesForContactsHandlerV3 } = await import('@/modules/fleet-operations/public/v1/driver-profiles-for-contacts-v3-handler')
   const { createDriverProfilesByExactLicenceHandlerV1 } = await import('@/modules/fleet-operations/public/v1/driver-profiles-by-exact-licence-handler')
 
   const authority = async () => decideContactReadAuthorityV1({ staffCookie: 'present', staffPrincipal: { userId: 'u1', role: fixture.role } })
@@ -63,7 +70,7 @@ vi.mock('@/modules/platform-shell/public/v1', async () => {
     mainDriverId: 'd-1', legacyYandexDriverId: null, phones: [], channels: [],
     lineage: { canonicalContactId: 'c-1', contactIds: ['c-1'], mergedFromCount: 0, mergeHistory: [] },
     conflicts: [], hasOpenConflict: false, hasPersonBlockingConflict: false, candidates: [],
-    automation: { doNotMerge: false, canonicalPinned: false, mergeRecoveryState: null }, isArchived: false,
+    automation: { doNotMerge: false, canonicalPinned: false, mergeRecoveryState: null }, isArchived: false, linkHistory: [],
   }
   return {
     loadContactPersonCardV1: createContactPersonCardCompositionV1({
@@ -73,7 +80,10 @@ vi.mock('@/modules/platform-shell/public/v1', async () => {
           ? { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card, licenceView: answer.licenceView } as never
           : { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'forbidden' }
       },
-      readDriverProfilesForContacts: createDriverProfilesForContactsHandlerV2(readV1 as never, licences),
+      readDriverProfilesForContacts: createDriverProfilesForContactsHandlerV3(
+        createDriverProfilesForContactsHandlerV2(readV1 as never, licences),
+        { async findCardFieldsOfDrivers(ids: readonly string[]) { return new Map(ids.map((id) => [id, { phone: '+79991000101', isSelfEmployed: true, employmentType: 'selfemployed' }])) } },
+      ),
       readContactConversations: async () => ({ contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] }) as never,
     }),
     searchPeopleByExactLicenceV1: createContactLicenceSearchCompositionV1({

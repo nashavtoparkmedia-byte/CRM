@@ -25,6 +25,9 @@ import {
   type ContactPersonCardConflictV1,
   type ContactPersonCardPhoneV1,
   type ContactPersonCardResultV1,
+  type ContactPersonCardActorV1,
+  type ContactPersonCardLinkEventKindV1,
+  type ContactPersonCardLinkEventV1,
   type ContactPersonCardStatusV1,
   type ContactPersonCardV1,
   type ContactPersonConfirmationV1,
@@ -89,6 +92,21 @@ export type ContactPersonCardSourceV1 = {
     createdAt: Date | string
     mergedId: string
     survivorId: string
+    /** snapshotBefore._merge.automated as stored; null when the record does not say. */
+    automated: boolean | null
+    /** snapshotBefore._merge.recoveryState / recoveredAt as stored. */
+    recoveryState: string | null
+    recoveredAt: Date | string | null
+  }>
+  /** ContactCommunicationPolicyEvent rows of the lineage, newest first, bounded. */
+  policyEvents: Array<{
+    eventId: string
+    cause: string
+    actor: string
+    recordedAt: Date | string
+    afterDenyAll: boolean
+    afterDenyMessage: boolean
+    afterDenyVoice: boolean
   }>
 }
 
@@ -293,6 +311,90 @@ function projectCandidates(source: ContactPersonCardSourceV1, conflicts: Contact
 }
 
 /** Projects one Contact source into the person card. Pure. */
+/** A stored actor string as one of the closed kinds; a free-text actor never crosses. */
+export function contactPersonCardActorV1(stored: unknown): ContactPersonCardActorV1 {
+  if (typeof stored !== 'string') return { kind: 'unknown' }
+  const staff = /^staff:([A-Za-z0-9_-]{1,64})$/u.exec(stored)
+  if (staff) return { kind: 'staff', userId: staff[1] }
+  if (stored === 'identity-access:integration-admin-session') return { kind: 'integration_admin' }
+  if (/^system:[a-z0-9_-]{1,64}$/u.test(stored)) return { kind: 'system' }
+  return { kind: 'unknown' }
+}
+
+function modeOf(actor: ContactPersonCardActorV1): ContactPersonCardLinkEventV1['mode'] {
+  if (actor.kind === 'staff' || actor.kind === 'integration_admin') return 'manual'
+  if (actor.kind === 'system') return 'automatic'
+  return 'unknown'
+}
+
+function restrictionDetail(event: { afterDenyAll: boolean; afterDenyMessage: boolean; afterDenyVoice: boolean }): string {
+  if (event.afterDenyAll) return 'deny_all'
+  if (event.afterDenyMessage && event.afterDenyVoice) return 'deny_message_voice'
+  if (event.afterDenyMessage) return 'deny_message'
+  if (event.afterDenyVoice) return 'deny_voice'
+  return 'none'
+}
+
+/**
+ * The stored link changes: merge records, the phone evidence audit trail, the
+ * driver-person confirmations and the communication policy events. Each event
+ * is one stored record; none is inferred from the current state.
+ */
+function projectLinkHistory(source: ContactPersonCardSourceV1, lineageIds: string[]): ContactPersonCardLinkEventV1[] {
+  const events: ContactPersonCardLinkEventV1[] = []
+  for (const merge of source.merges) {
+    if (!lineageIds.includes(merge.survivorId) && !lineageIds.includes(merge.mergedId)) continue
+    const at = iso(merge.createdAt)
+    if (at === null) continue
+    const actor = contactPersonCardActorV1(merge.mergedBy)
+    const mode = merge.automated === true ? 'automatic' : merge.automated === false ? 'manual' : modeOf(actor)
+    events.push({ kind: merge.action === 'unmerge' ? 'contacts_unmerged' : 'contacts_merged', at, subject: null, detail: null, mode, actor })
+    const recoveredAt = merge.recoveryState === 'recovered' ? iso(merge.recoveredAt) : null
+    if (recoveredAt !== null) events.push({ kind: 'merge_recovered', at: recoveredAt, subject: null, detail: null, mode: 'unknown', actor: { kind: 'unknown' } })
+  }
+  const evidenceByPhone = jsonRecord(jsonRecord(source.customFields).phoneEvidenceByPhoneId)
+  for (const phone of source.phones) {
+    const trail = jsonRecord(evidenceByPhone[phone.id]).auditTrail
+    if (!Array.isArray(trail)) continue
+    for (const raw of trail) {
+      const entry = jsonRecord(raw)
+      const at = iso(typeof entry.createdAt === 'string' ? entry.createdAt : null)
+      if (at === null) continue
+      const after = jsonRecord(entry.afterState)
+      const before = jsonRecord(entry.beforeState)
+      const actor = contactPersonCardActorV1(entry.actor)
+      let kind: ContactPersonCardLinkEventKindV1
+      if (entry.action === 'add_or_verify') kind = 'phone_added_or_verified'
+      else if (entry.action === 'attach_identity') kind = 'identity_attached_to_phone'
+      else if (entry.action === 'set_state' && after.lifecycle === 'removed') kind = 'phone_removed'
+      else if (entry.action === 'set_state' && after.isPrimary === true && before.isPrimary !== true) kind = 'phone_made_primary'
+      else if (entry.action === 'set_state') kind = 'phone_state_changed'
+      else continue
+      events.push({ kind, at, subject: phone.phone, detail: null, mode: modeOf(actor), actor })
+    }
+  }
+  const confirmations = jsonRecord(source.customFields).driverConfirmations
+  if (Array.isArray(confirmations)) {
+    for (const raw of confirmations) {
+      const record = jsonRecord(raw)
+      const at = iso(typeof record.confirmedAt === 'string' ? record.confirmedAt : null)
+      if (at === null) continue
+      const actor = contactPersonCardActorV1(record.confirmedBy)
+      const status = enumOf(record.status, ['confirmed', 'contradicted', 'revoked', 'needs_reconciliation'] as const, 'confirmed')
+      events.push({ kind: 'driver_profile_confirmed', at, subject: null, detail: status, mode: modeOf(actor), actor })
+    }
+  }
+  for (const event of source.policyEvents) {
+    const at = iso(event.recordedAt)
+    if (at === null) continue
+    const actor = contactPersonCardActorV1(event.actor)
+    events.push({ kind: 'communication_policy_changed', at, subject: null, detail: restrictionDetail(event), mode: modeOf(actor), actor })
+  }
+  return events
+    .sort((left, right) => (left.at > right.at ? -1 : left.at < right.at ? 1 : 0))
+    .slice(0, 50)
+}
+
 export function buildContactPersonCardV1(source: ContactPersonCardSourceV1): ContactPersonCardV1 {
   const automation = contactAutomationState(source.customFields)
   const phones = projectPhones(source)
@@ -350,6 +452,7 @@ export function buildContactPersonCardV1(source: ContactPersonCardSourceV1): Con
       mergeRecoveryState: automation.mergeRecoveryState,
     },
     isArchived: source.isArchived,
+    linkHistory: projectLinkHistory(source, lineageIds),
   }
 }
 

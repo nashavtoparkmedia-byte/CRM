@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import {
     getContactParkCheckContextV1,
     persistContactParkCheckResultV1,
@@ -13,7 +14,6 @@ import {
 } from '@/modules/fleet-operations/public/v1'
 import { attemptAutomaticContactMergeFromPlatformV1 } from '@/modules/platform-shell/internal/contact-park-merge-orchestrator'
 import {
-    getIntegrationAdminPrincipal,
     isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -115,7 +115,7 @@ export async function POST(
     if (!isExactSameOriginMutationRequest(request)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-    if (!await getIntegrationAdminPrincipal()) {
+    if ((await resolveContactWriteAuthorityV1()).decision !== 'allow') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

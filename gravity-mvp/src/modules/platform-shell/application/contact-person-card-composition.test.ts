@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CONTACT_PERSON_CARD_RESULT_V1, type ContactPersonCardV1 } from '@/contracts/contacts/v1'
-import { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, type DriverProfileForContactV2 } from '@/contracts/fleet-operations/v2'
+import { DRIVER_PROFILES_FOR_CONTACTS_RESULT_V3 as DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, type DriverProfileForContactV3 as DriverProfileForContactV2 } from '@/contracts/fleet-operations/v3'
 import { CONTACT_CONVERSATIONS_RESULT_V1 } from '@/contracts/messaging/v1'
 import { createContactPersonCardCompositionV1 } from './contact-person-card-composition'
 
@@ -24,6 +24,7 @@ function card(overrides: Partial<ContactPersonCardV1> = {}): ContactPersonCardV1
     candidates: [],
     automation: { doNotMerge: false, canonicalPinned: false, mergeRecoveryState: null },
     isArchived: false,
+    linkHistory: [],
     ...overrides,
   }
 }
@@ -32,7 +33,7 @@ function profile(overrides: Partial<DriverProfileForContactV2> & { driverId: str
   return {
     linkBasis: 'contact_link', linkedContactId: 'c-1', externalParkId: 'p', externalDriverProfileId: 'x', parkName: 'Парк', fullName: 'Иванов Иван',
     personResolutionStatus: 'vu_clustered', personKeyType: 'normalized_vu', sourceFreshness: 'fresh', sourceState: 'current',
-    lastObservedAt: null, legalRole: null, workStatus: null, currentStatus: null, segment: null, dismissedAt: null, licence: '•••• 5678',
+    lastObservedAt: null, legalRole: null, workStatus: null, currentStatus: null, segment: null, dismissedAt: null, licence: '•••• 5678', phone: null, isSelfEmployed: null, employmentType: null,
     ...overrides,
   }
 }
@@ -44,7 +45,7 @@ describe('loadContactPersonCardV1', () => {
       async readContactPersonCard() { calls.push('contacts'); return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card(), licenceView: 'last4' } },
       async readDriverProfilesForContacts(query) {
         calls.push('fleet')
-        expect(query).toEqual({ contract: 'fleet_operations.DriverProfilesForContactsQuery.v2', licenceView: 'last4', subjects: [
+        expect(query).toEqual({ contract: 'fleet_operations.DriverProfilesForContactsQuery.v3', licenceView: 'last4', subjects: [
           { contactId: 'c-1', legacyYandexDriverId: 'yd-1' }, { contactId: 'c-old', legacyYandexDriverId: null },
         ] })
         return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: 'last4', entries: [
@@ -214,5 +215,80 @@ describe('loadContactPersonCardV1', () => {
       expect(result.view.partial.driverProfiles).toBe(true)
       expect(JSON.stringify(result)).not.toContain('345678')
     }
+  })
+})
+
+describe('«История связей» names the employees it shows (Security W8)', () => {
+  const staffEvent = (userId: string) => ({ kind: 'phone_added_or_verified' as const, at: '2026-11-12T08:00:00.000Z', subject: null, detail: null, mode: 'manual' as const, actor: { kind: 'staff' as const, userId } })
+
+  async function load(linkHistory: unknown[], directory?: () => Promise<Array<{ id: string; firstName: string; lastName: string }>>) {
+    const calls: string[] = []
+    const compose = createContactPersonCardCompositionV1({
+      async readContactPersonCard() {
+        return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: card({ linkHistory: linkHistory as never }), licenceView: 'full' } as never
+      },
+      async readDriverProfilesForContacts(query) {
+        return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: (query as { licenceView: 'full' }).licenceView, entries: [] } as never
+      },
+      async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+      ...(directory ? { readStaffDirectory: async () => { calls.push('directory'); return directory() } } : {}),
+    })
+    return { result: await compose('c-1'), calls }
+  }
+
+  it('answers names for exactly the employees in the history, and nobody else', async () => {
+    const { result, calls } = await load([staffEvent('u1'), staffEvent('u1')], async () => [
+      { id: 'u1', firstName: 'Анна', lastName: 'Смирнова' },
+      { id: 'u9', firstName: 'Чужой', lastName: 'Сотрудник' },
+    ])
+    expect(calls).toEqual(['directory'])
+    expect(result).toMatchObject({ status: 'confirmed', view: { staffNames: { u1: 'Анна Смирнова' } } })
+    expect(JSON.stringify(result)).not.toContain('Чужой')
+  })
+
+  it('does not read the directory when no employee is named, and survives a directory failure', async () => {
+    const quiet = await load([{ ...staffEvent('x'), actor: { kind: 'system' } }], async () => [{ id: 'u1', firstName: 'Анна', lastName: 'Смирнова' }])
+    expect(quiet.calls).toEqual([])
+    expect(quiet.result).toMatchObject({ view: { staffNames: {} } })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const failed = await load([staffEvent('u1')], async () => { throw new Error('directory down') })
+    log.mockRestore()
+    expect(failed.result).toMatchObject({ status: 'confirmed', view: { staffNames: {} } })
+  })
+})
+
+describe('«ТГ-бот»: Telegram\'s display-only stored bot-link status', () => {
+  const tgCard = (externalIds: string[]) => card({ channels: [{ channel: 'telegram', accounts: externalIds.map((externalId, i) => ({
+    identityId: `tg-${i}`, externalId, displayName: null, username: null, isActive: true, source: 'auto', origin: 'x', conflictState: 'clear',
+    reachabilityStatus: 'confirmed', reachabilityCheckedAt: null, linkedPhoneId: null, aliasCount: 0, createdAt: '2026-11-01T00:00:00.000Z',
+  })) } as never] })
+
+  async function load(c: unknown, read?: (q: unknown) => Promise<unknown>) {
+    const queries: unknown[] = []
+    const compose = createContactPersonCardCompositionV1({
+      async readContactPersonCard() { return { contract: CONTACT_PERSON_CARD_RESULT_V1, status: 'confirmed', card: c, licenceView: 'full' } as never },
+      async readDriverProfilesForContacts(query) { return { contract: DRIVER_PROFILES_FOR_CONTACTS_RESULT_V2, licenceView: (query as { licenceView: 'full' }).licenceView, entries: [] } as never },
+      async readContactConversations() { return { contract: CONTACT_CONVERSATIONS_RESULT_V1, contacts: [] } },
+      ...(read ? { readBotLinkStatuses: async (q: unknown) => { queries.push(q); return read(q) as never } } : {}),
+    })
+    return { result: await compose('c-1'), queries }
+  }
+
+  it('asks only for the person\'s own queryable Telegram ids and keeps only stored / not stored', async () => {
+    const { result, queries } = await load(tgCard(['7001000101', '7001000102', 'not-a-number', '7001000103']), async () => ({
+      byTelegramId: { '7001000101': 'link_stored', '7001000102': 'no_link_stored', '7001000103': 'unknown' }, byDriverId: {},
+    }))
+    expect(queries).toEqual([{ contract: 'telegram.BotLinkStatusQuery.v1', telegramIds: ['7001000101', '7001000102', '7001000103'] }])
+    expect(result).toMatchObject({ status: 'confirmed', view: { botLinks: { '7001000101': 'link_stored', '7001000102': 'no_link_stored' } } })
+    expect((result as { view: { botLinks: Record<string, string> } }).view.botLinks).not.toHaveProperty('7001000103')
+  })
+
+  it('without Telegram accounts nothing is asked; a failed read leaves the column unknown and the card shown', async () => {
+    const none = await load(card(), async () => { throw new Error('should not be asked') })
+    expect(none.queries).toEqual([])
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const failed = await load(tgCard(['7001000101']), async () => { throw new Error('telegram store down') })
+    log.mockRestore()
+    expect(failed.result).toMatchObject({ status: 'confirmed', view: { botLinks: {} } })
   })
 })

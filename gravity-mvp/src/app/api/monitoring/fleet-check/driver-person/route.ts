@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { RECONCILE_YANDEX_FLEET_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import {
   searchYandexParksByDriverQueryV1,
 } from '@/modules/fleet-operations/public/v1'
@@ -21,9 +22,10 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
  * Contacts cluster links, which the confirm POST of /api/contacts/{id}/driver-person
  * then relies on. Its answer carries names, phones and the full ВУ.
  *
- * Security 2026-11-12 (Option B): it is admitted exactly like that confirm POST,
- * the signed integration-admin session only, until both move together to
- * Contacts' write authority. A cross-site request (Sec-Fetch-Site other than
+ * Security 2026-11-12 (Option B): it is admitted exactly like that confirm POST.
+ * Since Contact Identity V2-B both ask Contacts' write authority: an employee's
+ * own Staff Session of a reader role (recorded as staff:<id>), or transitionally
+ * the integration-admin session; never a mobile session. A cross-site request (Sec-Fetch-Site other than
  * same-origin) is refused before anything else. Each request is bounded: a query
  * floor, one search in flight per principal, at most 6 a minute and 60 an hour
  * per principal and 20 a minute in all, and a 15 s answer deadline; the slot is
@@ -67,15 +69,15 @@ function answer(body: unknown, status: number, headers: Record<string, string> =
 export async function GET(req: NextRequest) {
   const fetchSite = req.headers.get('sec-fetch-site')
   if (fetchSite !== null && fetchSite !== 'same-origin') return answer({ error: 'Forbidden' }, 403)
-  const principal = await getIntegrationAdminPrincipal()
-  if (!principal) return answer({ error: 'Unauthorized' }, 401)
+  const authority = await resolveContactWriteAuthorityV1()
+  if (authority.decision !== 'allow') return answer({ error: 'Unauthorized' }, 401)
 
   const query = req.nextUrl.searchParams.get('query')?.trim() || ''
   if (!searchableQuery(query)) {
     return answer({ error: 'Введите не меньше 5 букв имени, 7 цифр телефона или номер ВУ.', code: 'QUERY_TOO_SHORT' }, 400)
   }
 
-  const key = principal.id
+  const key = authority.actor
   const admission = admit(key, Date.now())
   if (admission !== 'admitted') {
     return answer({ error: 'Too Many Requests', code: admission === 'busy' ? 'SEARCH_IN_FLIGHT' : 'SEARCH_RATE_LIMITED' }, 429, { 'Retry-After': admission === 'busy' ? '5' : '60' })

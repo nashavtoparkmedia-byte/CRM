@@ -48,11 +48,24 @@ import {
     runDriverClusterContactOwnershipV1 as runDriverClusterContactOwnership,
 } from '../public/v1/driver-person-confirmation'
 import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-lineage-handler'
+import { createContactMergePreviewHandlerV1 } from '../internal/contact-merge-preview'
+import { resolveContactWriteAuthorityFromIdentityAccessV1 } from '../internal/identity-access-contact-write-authority'
+import { legacyPrismaContactMergePreviewSourcesV1 } from '../internal/legacy-prisma-contact-merge-preview-adapter'
+import { createContactIdentityMembershipHandlerV1 } from '../internal/contact-identity-membership'
+import { legacyPrismaContactIdentityMembershipSourceV1 } from '../internal/legacy-prisma-contact-identity-membership-adapter'
+import {
+    readContactReachabilityTargetV1 as readContactReachabilityTarget,
+    type ContactReachabilityChannelV1,
+    type ContactReachabilityTargetV1,
+} from '../internal/legacy-prisma-contact-reachability-target-adapter'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
 import {
+    CONTACT_COMMUNICATION_NO_RESTRICTION_V1,
     createContactCommunicationPermissionQueryHandlerV1,
     createSetContactCommunicationPolicyHandlerV1,
+    restrictionStateOfV1,
 } from '../public/v1/contact-communication-policy'
+import type { ContactCommunicationRestrictionStateV1 } from '@/contracts/contacts/v1'
 import {
     legacyPrismaContactCommunicationPolicyMutationPortV1,
     legacyPrismaContactCommunicationPolicyReadPortV1,
@@ -146,6 +159,27 @@ export const searchContactsV1 = (...args: Parameters<typeof searchContacts>) => 
 export const getContactCommunicationPermissionV1 = (...args: Parameters<typeof getContactCommunicationPermission>) => getContactCommunicationPermission(...args)
 export const setContactCommunicationPolicyV1 = (...args: Parameters<typeof setContactCommunicationPolicy>) => setContactCommunicationPolicy(...args)
 
+export type ContactCommunicationRestrictionReadV1 =
+    | { status: 'unknown' }
+    | { status: 'found'; canonicalContactId: string; isArchived: boolean; version: number; restriction: ContactCommunicationRestrictionStateV1 }
+
+/**
+ * «Ограничения связи» on the person card (V2, Q4): the canonical Contact's
+ * standing restriction and the version a change must name, read in the same one
+ * snapshot the permission query uses. Lineage errors propagate.
+ */
+export async function readContactCommunicationRestrictionV1(contactId: string): Promise<ContactCommunicationRestrictionReadV1> {
+    const state = await legacyPrismaContactCommunicationPolicyReadPortV1.readPermissionState(contactId)
+    if (state.kind === 'unknown') return { status: 'unknown' }
+    return {
+        status: 'found',
+        canonicalContactId: state.canonicalContactId,
+        isArchived: state.isArchived,
+        version: state.policy?.version ?? 0,
+        restriction: restrictionStateOfV1(state.policy ?? CONTACT_COMMUNICATION_NO_RESTRICTION_V1),
+    }
+}
+
 export type { ContactCardConversationResolverV1 }
 /**
  * The ContactCardForConversationQuery.v1 reader. The composition supplies only
@@ -159,3 +193,19 @@ export function createContactCardForConversationReaderV1(resolveConversation: Co
         cardSource: legacyPrismaContactCardSourcePortV1,
     })
 }
+
+// contacts.ContactMergePreviewQuery.v1: read-only; the caller has passed the read authority.
+const previewContactMerge = createContactMergePreviewHandlerV1(legacyPrismaContactMergePreviewSourcesV1)
+export const previewContactMergeV1 = (...args: Parameters<typeof previewContactMerge>) => previewContactMerge(...args)
+
+// ContactReachability.v1, the card's «Проверить» (V2 W5): the stored number and exact binding of one
+// Contact's own phone or account, resolved on the server; the caller has passed the write authority.
+export const readContactReachabilityTargetV1 = (...args: Parameters<typeof readContactReachabilityTarget>) => readContactReachabilityTarget(...args)
+export type { ContactReachabilityChannelV1, ContactReachabilityTargetV1 }
+
+// contacts.ContactIdentityMembershipQuery.v1 (V2, for Messaging's «Для связи»): states of exact accounts, ids only.
+const readContactIdentityMembership = createContactIdentityMembershipHandlerV1(legacyPrismaContactIdentityMembershipSourceV1)
+export const readContactIdentityMembershipV1 = (...args: Parameters<typeof readContactIdentityMembership>) => readContactIdentityMembership(...args)
+
+// contacts.ContactWriteAuthorityQuery.v1: every Contacts write route asks it first (Security W1).
+export const resolveContactWriteAuthorityV1 = () => resolveContactWriteAuthorityFromIdentityAccessV1()

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveContactWriteAuthorityV1 } from '@/modules/contacts/public/v1'
 import {
   openContactConversationForContactV1,
   type PlatformContactConversationChannelV1,
 } from '@/modules/platform-shell/internal/contact-conversation-orchestrator'
 import {
-  getIntegrationAdminPrincipal,
   isExactSameOriginMutationRequest,
 } from '@/modules/identity-access/public/v1'
 
@@ -27,7 +27,7 @@ export async function POST(
   if (!isExactSameOriginMutationRequest(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
-  if (!await getIntegrationAdminPrincipal()) {
+  if ((await resolveContactWriteAuthorityV1()).decision !== 'allow') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
