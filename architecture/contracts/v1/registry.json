@@ -485,6 +485,7 @@
     },
     {
       "capabilities": [
+        "BotLinkStatusQuery.v1",
         "BotSurveyApi.v1",
         "BotUserProfileCommands.v1",
         "DriverTelegramParkLinkQuery.v1",
