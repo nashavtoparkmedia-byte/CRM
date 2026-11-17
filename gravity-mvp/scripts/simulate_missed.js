@@ -2,7 +2,7 @@ const fetch = require('node-fetch');
 
 async function testMissedMessages() {
   const url = 'http://localhost:3002/api/webhook/telegram';
-  const telegramId = '316425068';
+  const telegramId = (process.env.YOKO_SCRIPT_TELEGRAM_ID || (() => { throw new Error('YOKO_SCRIPT_TELEGRAM_ID is required: no built-in Telegram id'); })());
   
   const messages = ['2222', '3333'];
 

@@ -4,7 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function fixName() {
-  const externalChatId = 'telegram:316425068';
+  const externalChatId = 'telegram:' + (process.env.YOKO_SCRIPT_TELEGRAM_ID || (() => { throw new Error('YOKO_SCRIPT_TELEGRAM_ID is required: no built-in Telegram id'); })());
   console.log('Restoring name to "Ремезов Александр" for', externalChatId);
   
   await restoreChatDisplayNameV1(externalChatId, 'Ремезов Александр');
