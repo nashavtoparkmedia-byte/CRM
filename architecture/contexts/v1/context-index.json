@@ -28,7 +28,7 @@
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "abb2b453b295febc06b7644889bd133c3387b7711977ae9a6d4a29479621d4da"
+      "sha256": "3fb894c59f8619ac50abe8364639d506f6239266dd37c9f3b3a572280f474193"
     },
     {
       "context": "edge_delivery",
@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "afd1b3fd4337a8694d20e8ada3c86690d7d0e081cfca35af9f6e5dd4daa80334"
+      "sha256": "36d26c42b5c93a3f2511b82187ea8539e2df2c8834cecfbb110d014df197cab3"
     },
     {
       "context": "identity_access",
@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "27a40fbda2e7f06a0d690ae7d7b41c855b19927916eca7a4b9f7065c03b1c3a1"
+      "sha256": "62867e0e3f8203b0e2a3542e51c673c7bb4e91dd467c78d933f97cab0a25ed42"
     },
     {
       "context": "telegram_channel",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "bd2b2d2c6a968abadbfeb84e18649e1297bc8f02ced4bd1b9a47c44dfdb548bf"
+      "sha256": "fff40d384a2b62c339943b7ec31e4356557b2a89fdcc07d109da1993a56580dc"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "9f3b35be126b815a7880a205cd1d8dc5afa7e48f5759b89cddafd8b3313000c8"
+      "sha256": "6ae93bf8abce8fca37e1d3c1c727e2662123f5d6b284731d5d3524367936a93a"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "bda0f1fc0756f390cb4e8a93ff629a52769e1d9c9baeb327923d2c4bdd97dfbe"
+      "sha256": "fbd731ca7962fef475c2525c7b1f8573334ecb65443437c78727d7c63c45ea66"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
