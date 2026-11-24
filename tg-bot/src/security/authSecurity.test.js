@@ -177,13 +177,14 @@ test('webhook authentication fails closed for missing and invalid secret headers
             assert.equal(weak.statusCode, 503);
         }
 
-        process.env.TELEGRAM_WEBHOOK_SECRET = 'telegram-delivery-secret';
+        const strongWebhookSecret = 'unit-test-telegram-webhook-secret-long-enough';
+        process.env.TELEGRAM_WEBHOOK_SECRET = strongWebhookSecret;
         const invalid = responseRecorder();
         requireTelegramWebhookSecret(request('wrong'), invalid, () => assert.fail('invalid secret must fail'));
         assert.equal(invalid.statusCode, 401);
 
         let nextCalled = false;
-        requireTelegramWebhookSecret(request('telegram-delivery-secret'), responseRecorder(), () => { nextCalled = true; });
+        requireTelegramWebhookSecret(request(strongWebhookSecret), responseRecorder(), () => { nextCalled = true; });
         assert.equal(nextCalled, true);
     } finally {
         if (previous === undefined) delete process.env.TELEGRAM_WEBHOOK_SECRET;
@@ -311,7 +312,9 @@ test('driver registry sync preserves identity, fails closed and retries historic
     const bot = read('src/bot.js');
     assert.match(service, /telegramId: String\(user\.telegram_id \?\? user\.telegramId\)/);
     assert.match(service, /phoneVerified: Boolean\(user\.phone_verified \?\? user\.phoneVerified\)/);
-    assert.match(service, /if \(!signature\) return resolve\(\{ ok: false/);
+    assert.match(service, /signature = getRequiredBotCrmSecret\(\)/);
+    assert.match(service, /catch \(error\) \{\s+return resolve\(\{ ok: false, error \}\)/);
+    assert.doesNotMatch(service, /process\.env\.BOT_CRM_SECRET/);
     assert.match(service, /action: 'register_bot_user'/);
     assert.match(service, /attemptAutoLink: false/);
     assert.match(service, /\/api\/webhook\/telegram/);

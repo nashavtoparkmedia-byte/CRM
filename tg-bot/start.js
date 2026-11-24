@@ -27,9 +27,24 @@ console.log('========================================');
 require('dotenv').config();
 console.log('Environment variables loaded from .env');
 
-// Now require and run the main bot from src/
-require('./src/bot.js');
+// Acquire a PostgreSQL session lock before starting polling. Every new bot
+// process using this database shares the same lock, including across hosts.
+async function start() {
+    const singletonLock = require('./src/services/botSingletonLock');
+    await singletonLock.runWithLock(async () => {
+        // Now require and run the main bot from src/
+        require('./src/bot.js');
 
-// Start the backend API server
-const { startServer } = require('./src/app.js');
-startServer();
+        // Start the backend API server
+        const { startServer } = require('./src/app.js');
+        startServer();
+    });
+}
+
+start().catch((error) => {
+    const reason = error?.message === 'BOT_SINGLETON_ALREADY_RUNNING'
+        ? 'another process holds the bot lock'
+        : 'startup dependency unavailable';
+    console.error(`[Startup] Bot startup refused (${reason})`);
+    process.exit(1);
+});

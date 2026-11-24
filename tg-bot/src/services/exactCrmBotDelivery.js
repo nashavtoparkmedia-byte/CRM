@@ -1,5 +1,7 @@
 'use strict';
 
+const { constantTimeSecretEqual, isAcceptableBotCrmSecret } = require('../security/botCrmSecret');
+
 function concreteId(value) {
     if (typeof value !== 'string' && typeof value !== 'number') return null;
     const normalized = String(value).trim();
@@ -55,8 +57,8 @@ function createExactCrmBotDeliveryHandler({ bot, logger, environment = process.e
     return async function exactCrmBotDelivery(req, res) {
         let requestedPeer = null;
         try {
-            const secret = concreteId(environment.BOT_CRM_SECRET);
-            if (!secret || req.get('x-bot-signature') !== secret) {
+            const secret = typeof environment.BOT_CRM_SECRET === 'string' ? environment.BOT_CRM_SECRET.trim() : '';
+            if (!isAcceptableBotCrmSecret(secret) || !constantTimeSecretEqual(req.get('x-bot-signature'), secret)) {
                 throw new Error('TELEGRAM_BOT_TRANSPORT_UNAUTHORIZED');
             }
 

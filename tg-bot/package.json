@@ -5,7 +5,7 @@
   "main": "bot.js",
   "scripts": {
     "start": "node start.js",
-    "start:direct": "node bot.js",
+    "start:direct": "node start.js",
     "gen": "prisma generate",
     "test:security-boundaries": "node --test src/security/*.test.js",
     "test:services": "node --test src/services/*.test.js"

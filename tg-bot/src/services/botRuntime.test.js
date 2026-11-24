@@ -44,7 +44,7 @@ test('webhook secret validation fails closed on missing input', () => {
 });
 
 test('an explicitly configured secret overrides the derived one', () => {
-    const explicit = 'explicit-secret-value-0123456789';
+    const explicit = 'unit-test-explicit-webhook-secret-value-0123456789';
     const r = runtime({ BOT_UPDATE_MODE: 'webhook', TELEGRAM_WEBHOOK_SECRET: explicit });
     assert.equal(r.validateWebhookSecret(explicit), true);
     assert.equal(r.validateWebhookSecret(deriveWebhookSecret(TOKEN)), false);
@@ -52,11 +52,66 @@ test('an explicitly configured secret overrides the derived one', () => {
 
 test('webhook mode refuses a non-HTTPS webhook URL', async () => {
     const r = runtime({ BOT_UPDATE_MODE: 'webhook', TELEGRAM_WEBHOOK_URL: 'http://insecure.example/hook' });
-    r.attach({ telegram: {} });
+    r.attach({ telegram: {}, handleUpdate() {} });
     await assert.rejects(() => r.start(), /HTTPS/);
 });
 
 test('polling mode never performs webhook recovery', async () => {
     const r = runtime({ BOT_UPDATE_MODE: 'polling' });
     await assert.rejects(() => r.ensureWebhook('manual'), /not webhook/);
+});
+
+test('polling update guard coalesces concurrent and repeated update ids', async () => {
+    const r = runtime({ BOT_UPDATE_MODE: 'polling' });
+    const bot = {
+        botInfo: { id: 1, username: 'test_bot' },
+        handleUpdate: async () => {},
+        telegram: {},
+    };
+    r.attach(bot);
+    await r.ensureBotIdentity();
+    let dispatches = 0;
+    let releaseDispatch;
+    const gate = new Promise((resolve) => { releaseDispatch = resolve; });
+    const dispatch = async () => {
+        dispatches += 1;
+        await gate;
+    };
+
+    const first = r.handleUpdate({ update_id: 100 }, dispatch);
+    const concurrent = r.handleUpdate({ update_id: 100 }, dispatch);
+    releaseDispatch();
+    await Promise.all([first, concurrent]);
+    await r.handleUpdate({ update_id: 100 }, dispatch);
+
+    assert.equal(dispatches, 1);
+});
+
+test('polling proves the Telegram bot identity before dispatching updates', async () => {
+    const r = runtime({ BOT_UPDATE_MODE: 'polling' });
+    const calls = [];
+    const bot = {
+        botInfo: null,
+        handleUpdate: async () => {},
+        launch: async () => {},
+        telegram: {
+            async getMe() {
+                calls.push('getMe');
+                return { id: 1, username: 'test_bot' };
+            },
+            async deleteWebhook(options) {
+                calls.push(['deleteWebhook', options]);
+            },
+        },
+    };
+    r.attach(bot);
+
+    await r.start();
+    let dispatches = 0;
+    await r.handleUpdate({ update_id: 101 }, async () => { dispatches += 1; });
+
+    assert.deepEqual(calls, ['getMe', ['deleteWebhook', { drop_pending_updates: false }]]);
+    assert.equal(r.identityEstablished(), true);
+    assert.equal(dispatches, 1);
+    r.stop();
 });

@@ -13,6 +13,7 @@
  */
 
 const MAX_BYTES = 8 * 1024 * 1024;
+const { constantTimeSecretEqual, isAcceptableBotCrmSecret } = require('../security/botCrmSecret');
 const FETCH_TIMEOUT_MS = 12_000;
 /** Telegram file ids are URL-safe base64. */
 const FILE_ID = /^[A-Za-z0-9_-]{8,256}$/;
@@ -23,7 +24,19 @@ const CONTENT_TYPES = {
     png: 'image/png',
     webp: 'image/webp',
     gif: 'image/gif',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
+    ogg: 'audio/ogg',
+    oga: 'audio/ogg',
+    mp3: 'audio/mpeg',
+    m4a: 'audio/mp4',
     pdf: 'application/pdf',
+    doc: 'application/msword',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    zip: 'application/zip',
 };
 
 function concreteId(value) {
@@ -38,10 +51,34 @@ function contentTypeForPath(filePath) {
     return CONTENT_TYPES[String(extension).toLowerCase()] ?? null;
 }
 
+async function readBoundedBody(response, maxBytes) {
+    if (!response.body || typeof response.body.getReader !== 'function') {
+        throw new Error('TELEGRAM_FILE_BODY_UNAVAILABLE');
+    }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let total = 0;
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > maxBytes) {
+                await reader.cancel().catch(() => {});
+                return null;
+            }
+            chunks.push(Buffer.from(value));
+        }
+        return Buffer.concat(chunks, total);
+    } finally {
+        reader.releaseLock();
+    }
+}
+
 function createExactCrmBotFileHandler({ bot, logger, environment = process.env, maxBytes = MAX_BYTES }) {
     return async function exactCrmBotFile(req, res) {
-        const secret = concreteId(environment.BOT_CRM_SECRET);
-        if (!secret || req.get('x-bot-signature') !== secret) {
+        const secret = typeof environment.BOT_CRM_SECRET === 'string' ? environment.BOT_CRM_SECRET.trim() : '';
+        if (!isAcceptableBotCrmSecret(secret) || !constantTimeSecretEqual(req.get('x-bot-signature'), secret)) {
             return res.status(401).json({ success: false, error: 'TELEGRAM_BOT_TRANSPORT_UNAUTHORIZED' });
         }
 
@@ -89,12 +126,12 @@ function createExactCrmBotFileHandler({ bot, logger, environment = process.env, 
 
         let body;
         try {
-            body = Buffer.from(await response.arrayBuffer());
+            body = await readBoundedBody(response, maxBytes);
         } catch (error) {
             logger.warn(`[crmBotFile] body read failed: ${error?.name || 'error'}`);
             return res.status(502).json({ success: false, error: 'TELEGRAM_FILE_DOWNLOAD_FAILED' });
         }
-        if (body.byteLength > maxBytes) {
+        if (!body) {
             return res.status(413).json({ success: false, error: 'TELEGRAM_FILE_TOO_LARGE' });
         }
 

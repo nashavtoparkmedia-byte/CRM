@@ -2,6 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { getRequiredBotCrmSecret } = require('../security/botCrmSecret');
 const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 // IMPORTANT: this scene uses ACTION-based webhook /api/webhooks/bot,
@@ -21,8 +22,6 @@ const CRM_URL = () => {
     }
     return 'http://localhost:3002/api/webhooks/bot';
 };
-const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
-
 function postJSON(url, body, headers = {}) {
     return new Promise((resolve) => {
         const parsed = new URL(url);
@@ -61,7 +60,7 @@ function postJSON(url, body, headers = {}) {
 }
 
 async function callCRM(action, payload) {
-    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': CRM_SECRET() });
+    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': getRequiredBotCrmSecret() });
     logger.info(`[CarScene] CRM ${action}: status=${result.status}`);
     return result;
 }

@@ -366,7 +366,12 @@ Each entry lists what the code actually does.
   transport id comes only from configuration: `CRM_TELEGRAM_CONNECTION_ID`, read
   by `canonicalTelegramBotConnectionIdV1()`. It is never taken from a stored
   `Chat` or `TelegramConnection` row, and a missing, untrimmed or placeholder
-  value fails closed (`TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN`).
+  value fails closed (`TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN`). In polling
+  mode, startup proves the Telegram bot identity before accepting updates and
+  acquires a PostgreSQL advisory lock; the lock prevents concurrent instances
+  only when they use the same database. Confirm no legacy receiver uses the bot
+  token before launch. CRM media retrieval is relayed through the authenticated
+  `tg-bot` file endpoint so the Telegram token stays inside its owning process.
 - **Extension points**: `TelegramChannelDeliveryV1` in
   `channel-delivery-runtime.ts`; a new bot action = a `case` in
   `G/app/api/webhooks/bot/route.ts` + a tg-bot handler.

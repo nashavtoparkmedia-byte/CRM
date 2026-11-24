@@ -3,8 +3,11 @@
 const { constantTimeEqual } = require('../middleware/auth');
 
 function isAcceptableWebhookSecret(secret) {
-    if (typeof secret !== 'string' || secret.length < 16 || secret.length > 256) return false;
-    return !/(?:placeholder|replace[-_ ]?me|change[-_ ]?me|__generate)/i.test(secret.trim());
+    if (typeof secret !== 'string') return false;
+    const value = secret.trim();
+    if (value.length < 32 || value.length > 256) return false;
+    if (/(?:placeholder|replace[-_ ]?me|change[-_ ]?me|__generate|your[-_ ]?secret)/i.test(value)) return false;
+    return !/^(.)\1+$/.test(value);
 }
 
 function requireTelegramWebhookSecret(req, res, next) {

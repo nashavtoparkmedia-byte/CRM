@@ -97,8 +97,9 @@ vi.mock('@/modules/contacts/public/v1/contact-reachability', () => ({
 import { POST } from './route'
 
 const originalSecret = process.env.BOT_CRM_SECRET
+const TEST_BOT_CRM_SECRET = 'unit-test-bot-crm-secret-long-enough-for-auth'
 
-function request(overrides: Record<string, unknown> = {}, signature = 'test-bot-secret') {
+function request(overrides: Record<string, unknown> = {}, signature = TEST_BOT_CRM_SECRET) {
   return new NextRequest('https://crm.example/api/webhook/telegram', {
     method: 'POST',
     headers: {
@@ -157,7 +158,7 @@ function expectNoPersonOrMessageMutation() {
 describe('Telegram webhook account and transport admission', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.BOT_CRM_SECRET = 'test-bot-secret'
+    process.env.BOT_CRM_SECRET = TEST_BOT_CRM_SECRET
     mocks.appendCollision.mockResolvedValue(undefined)
     mocks.markIdentityConflict.mockResolvedValue(undefined)
     mocks.linkDriver.mockResolvedValue(false)
@@ -189,6 +190,27 @@ describe('Telegram webhook account and transport admission', () => {
   afterAll(() => {
     if (originalSecret === undefined) delete process.env.BOT_CRM_SECRET
     else process.env.BOT_CRM_SECRET = originalSecret
+  })
+
+  test('rejects unauthenticated registration before parsing or recording its body', async () => {
+    const req = new NextRequest('https://crm.example/api/webhook/telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-bot-signature': 'wrong-signature' },
+      body: '{invalid json',
+    })
+
+    const response = await POST(req)
+
+    expect(response.status).toBe(401)
+    expect(mocks.recordProfile).not.toHaveBeenCalled()
+  })
+
+  test('fails closed when the configured shared secret is a placeholder', async () => {
+    process.env.BOT_CRM_SECRET = 'secret'
+    const response = await POST(registrationRequest({ telegramId: '42' }))
+
+    expect(response.status).toBe(401)
+    expect(mocks.recordProfile).not.toHaveBeenCalled()
   })
 
   test('creates a new private Chat with transport-neutral metadata', async () => {
@@ -487,7 +509,7 @@ describe('Telegram webhook account and transport admission', () => {
   // Registration records BotUser profile evidence only; it must not depend on
   // shared Chat transport ownership.
 
-  function registrationRequest(payload: Record<string, unknown>, signature = 'test-bot-secret') {
+  function registrationRequest(payload: Record<string, unknown>, signature = TEST_BOT_CRM_SECRET) {
     return new NextRequest('https://crm.example/api/webhook/telegram', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-bot-signature': signature },

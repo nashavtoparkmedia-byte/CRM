@@ -1,5 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(process.cwd(), '.env') });
+const { getRequiredBotCrmSecret } = require('./security/botCrmSecret');
 
 const config = {
     // Bot configuration
@@ -37,6 +38,7 @@ const config = {
         if (!this.botToken) {
             throw new Error('BOT_TOKEN is required in .env file');
         }
+        getRequiredBotCrmSecret();
         if (!this.adminId) {
             console.warn('Warning: ADMIN_IDS not set in .env file');
         }

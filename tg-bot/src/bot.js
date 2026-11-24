@@ -1,8 +1,10 @@
 require('./utils/log-interceptor');
-const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const config = require('./config');
+config.validate();
+const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const db = require('./database');
 const botRuntime = require('./services/botRuntime');
+const botSingletonLock = require('./services/botSingletonLock');
 const logger = require('./utils/logger');
 const { ensureBotMappingV1 } = require('./public-bot-maintenance');
 const sheetsService = require('./services/sheets');
@@ -18,9 +20,6 @@ const carManagementScene = require('./handlers/carManagement');
 const driverOrderScene = require('./handlers/driverOrder');
 const quickLimitScene = require('./handlers/quickLimit');
 const parkSelectScene = require('./handlers/parkSelect');
-
-// Validate configuration
-config.validate();
 
 // SOCKS5 proxy for Telegram API (РКН block bypass).
 // Read TELEGRAM_SOCKS_PROXY from .env, default to local xray on 10808.
@@ -43,6 +42,11 @@ const bot = new Telegraf(config.botToken, telegrafOptions);
 // The runtime needs the instance for webhook registration and update dispatch;
 // attaching is inert until start() is called.
 botRuntime.attach(bot);
+const dispatchTelegramUpdate = bot.handleUpdate.bind(bot);
+bot.handleUpdate = (update, webhookResponse) => botRuntime.handleUpdate(
+    update,
+    () => dispatchTelegramUpdate(update, webhookResponse),
+);
 
 // 1. Session middleware (Must be first)
 bot.use(session());
@@ -413,14 +417,14 @@ async function relaunchPolling(reason) {
     relaunching = true;
     logger.warn(`[Heartbeat] relaunch (reason: ${reason})`);
     try {
-        bot.stop('heartbeat_relaunch');
+    botRuntime.stop();
     } catch (e) {
         logger.warn(`[Heartbeat] bot.stop threw: ${e?.message || e}`);
     }
     // Give Telegram a moment to release the previous getUpdates lock,
     // otherwise the new launch will get 409 Conflict.
     await new Promise(r => setTimeout(r, 3000));
-    bot.launch()
+    botRuntime.start()
         .then(() => logger.info('[Heartbeat] relaunched OK'))
         .catch((err) => logger.error(`[Heartbeat] relaunch failed: ${err?.message || err}`));
     // bot.launch() in polling mode never resolves; release the lock
@@ -445,9 +449,8 @@ Promise.all([
         return botRuntime.start();
     }
 
-    // bot.launch() returns a Promise that never resolves in polling mode —
-    // we intentionally don't .then() it. We just need it kicked off.
-    bot.launch().catch((err) => logger.error(`Bot launch error: ${err?.message || err}`));
+    // Keep polling updates on the same single-flight/replay guard as webhooks.
+    botRuntime.start().catch((err) => logger.error(`Bot launch error: ${err?.message || err}`));
     logger.info('Bot launching, heartbeat armed every ' + (HEARTBEAT_INTERVAL_MS / 1000) + 's');
 
     setInterval(async () => {
@@ -466,15 +469,25 @@ Promise.all([
 process.once('SIGINT', () => {
     logger.info('SIGINT received, stopping bot...');
     botRuntime.stop();
-    bot.stop('SIGINT');
-    db.close().then(() => process.exit(0));
+    db.close()
+        .then(() => botSingletonLock.release())
+        .then(() => process.exit(0))
+        .catch((error) => {
+            logger.error(`Shutdown cleanup failed: ${error?.message || error}`);
+            process.exit(1);
+        });
 });
 
 process.once('SIGTERM', () => {
     logger.info('SIGTERM received, stopping bot...');
     botRuntime.stop();
-    bot.stop('SIGTERM');
-    db.close().then(() => process.exit(0));
+    db.close()
+        .then(() => botSingletonLock.release())
+        .then(() => process.exit(0))
+        .catch((error) => {
+            logger.error(`Shutdown cleanup failed: ${error?.message || error}`);
+            process.exit(1);
+        });
 });
 
 module.exports = bot;

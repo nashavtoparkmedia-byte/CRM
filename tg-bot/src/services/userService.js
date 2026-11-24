@@ -2,6 +2,7 @@ const https = require('https');
 const http = require('http');
 const db = require('../database');
 const logger = require('../utils/logger');
+const { getRequiredBotCrmSecret } = require('../security/botCrmSecret');
 
 const SYNC_INTERVAL_MS = Number.parseInt(process.env.BOT_REGISTRY_SYNC_INTERVAL_MS || '300000', 10);
 const SYNC_BATCH_SIZE = 200;
@@ -33,8 +34,12 @@ function crmRegistrationUrl() {
 
 function postRegistration(payload) {
     return new Promise((resolve) => {
-        const signature = process.env.BOT_CRM_SECRET;
-        if (!signature) return resolve({ ok: false, error: new Error('BOT_CRM_SECRET is not configured') });
+        let signature;
+        try {
+            signature = getRequiredBotCrmSecret();
+        } catch (error) {
+            return resolve({ ok: false, error });
+        }
         const body = JSON.stringify({ action: 'register_bot_user', payload });
         const parsed = new URL(crmRegistrationUrl());
         const transport = parsed.protocol === 'https:' ? https : http;

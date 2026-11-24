@@ -290,8 +290,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "80:80"     # HTTP — Let's Encrypt validation + 301 на HTTPS
-      - "443:443"   # HTTPS — основной
+      # Rootless Docker cannot bind host ports below 1024 under the current
+      # unprivileged-port policy. Forward router TCP 80→8080 and 443→8443.
+      - "8080:80"   # HTTP — Let's Encrypt validation + 301 на HTTPS
+      - "8443:443"  # HTTPS — основной
     volumes:
       # conf.d — записываемая, потому что nginx entrypoint envsubst пишет сюда
       # processed templates (NGINX_ENVSUBST_OUTPUT_DIR). default.conf оставляем
@@ -376,6 +378,7 @@ services:
       # Docker-internal bot API. Production sets this explicitly so a stale shared
       # value cannot redirect manager identification; the code default matches.
       TG_BOT_API_URL: ${TG_BOT_API_URL:-http://tg-bot:3001}
+      BOT_CRM_SECRET: ${BOT_CRM_SECRET:?BOT_CRM_SECRET must be set in .env.production}
     volumes:
       # Записи звонков и медиа — write-through в S3, но локальный кэш нужен
       - gravity_recordings:/app/recordings
@@ -411,11 +414,9 @@ services:
       NODE_ENV: production
       # gravity-mvp callbacks — через внутреннюю сеть
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
-      # Update transport. `webhook` requires TELEGRAM_WEBHOOK_URL to be a public
-      # HTTPS endpoint terminated by nginx. Production runs webhook mode, so that
-      # is the default here; a host without inbound TLS sets BOT_UPDATE_MODE
-      # explicitly to `polling` in .env.production.
-      BOT_UPDATE_MODE: ${BOT_UPDATE_MODE:-webhook}
+      # Initial P0 transport is long polling; HTTPS ingress is not required.
+      BOT_UPDATE_MODE: ${BOT_UPDATE_MODE:-polling}
+      BOT_CRM_SECRET: ${BOT_CRM_SECRET:?BOT_CRM_SECRET must be set in .env.production}
       TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-https://${BOT_ADMIN_DOMAIN}/api/telegram/webhook}
       # Self-healing: re-assert the webhook registration if Telegram drops it.
       BOT_WEBHOOK_CHECK_INTERVAL_MS: ${BOT_WEBHOOK_CHECK_INTERVAL_MS:-60000}

@@ -1,6 +1,7 @@
 const http = require('http');
 const https = require('https');
 const logger = require('../utils/logger');
+const { isAcceptableBotCrmSecret } = require('../security/botCrmSecret');
 const config = require('../config');
 const { resolveCrmWebhookUrl } = require('./crmWebhookUrl');
 const { redactStartCommandText } = require('../security/redactSecrets');
@@ -209,7 +210,7 @@ class CrmIntegrationService {
                 const providerEvidence = extractTelegramProviderEvidence(ctx);
                 const connectionId = String(process.env.CRM_TELEGRAM_CONNECTION_ID || process.env.TELEGRAM_CONNECTION_ID || '').trim();
                 const signature = String(process.env.BOT_CRM_SECRET || '').trim();
-                if (!providerEvidence || !connectionId || !signature) {
+                if (!providerEvidence || !connectionId || !isAcceptableBotCrmSecret(signature)) {
                     logger.error('[CRM IN] Refusing unbound webhook: live bot/update evidence, CRM Telegram connection, and BOT_CRM_SECRET are required');
                     return resolve({
                         outcome: CRM_FORWARD_OUTCOME.UNBOUND,

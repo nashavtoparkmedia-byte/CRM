@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { sendTelegramBotMessage as deliverTelegramBotMessage } from '@/app/tg-bot-actions'
 import { changeDriverLimit } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
@@ -115,7 +116,19 @@ function telegramProviderEventExternalId(
 
 function telegramIngressAuthorized(req: NextRequest): boolean {
     const secret = process.env.BOT_CRM_SECRET
-    return Boolean(secret && req.headers.get('x-bot-signature') === secret)
+    const supplied = req.headers.get('x-bot-signature')
+    if (typeof secret !== 'string' || !supplied) return false
+    const expected = secret.trim()
+    if (
+        expected.length < 32
+        || expected.length > 256
+        || /(?:placeholder|replace[-_ ]?me|change[-_ ]?me|__generate|your[-_ ]?secret)/i.test(expected)
+        || /^(.)\1+$/.test(expected)
+    ) return false
+    const suppliedBytes = Buffer.from(supplied)
+    const expectedBytes = Buffer.from(expected)
+    return suppliedBytes.length === expectedBytes.length
+        && timingSafeEqual(suppliedBytes, expectedBytes)
 }
 
 async function sendTelegramBotMessage(
@@ -279,11 +292,6 @@ function optionalProfileValue(value: unknown) {
 }
 
 async function registerBotUser(req: NextRequest, payload: BotUserRegistrationInput) {
-    const secret = process.env.BOT_CRM_SECRET
-    if (!secret || req.headers.get('x-bot-signature') !== secret) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const telegramId = String(payload.telegramId || '').trim()
     if (!/^\d+$/.test(telegramId) || telegramId === '0') {
         return NextResponse.json({ error: 'Missing or invalid telegramId' }, { status: 400 })
@@ -319,14 +327,14 @@ async function registerBotUser(req: NextRequest, payload: BotUserRegistrationInp
 
 export async function POST(req: NextRequest) {
     try {
+        if (!telegramIngressAuthorized(req)) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
         const body = await req.json()
         if (body?.action === 'register_bot_user') {
             return registerBotUser(req, (body.payload || {}) as BotUserRegistrationInput)
         }
-        if (!telegramIngressAuthorized(req)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-        console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
+        console.log('[WEBHOOK-TG] Authenticated update received')
 
         // Structure expected from Bot's webhook payload
         const { telegramId, text, direction, username, timestamp, providerAccountId, connectionId,
