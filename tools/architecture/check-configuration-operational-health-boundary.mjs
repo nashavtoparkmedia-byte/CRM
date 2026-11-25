@@ -10,7 +10,7 @@ const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const consumers = [
   'gravity-mvp/src/app/api/monitoring/guardrails/route.ts',
   'gravity-mvp/src/app/monitoring/system-health/actions.ts',
-  'gravity-mvp/src/instrumentation.ts',
+  'gravity-mvp/src/instrumentation.node.ts',
 ]
 
 for (const consumer of consumers) {

@@ -16,7 +16,7 @@ const publicPath = 'gravity-mvp/src/modules/messaging/public/v1/delivery-recover
 const publicBarrelPath = 'gravity-mvp/src/modules/messaging/public/v1/index.ts'
 const publicAggregatorPath = 'gravity-mvp/src/modules/messaging/public/index.ts'
 const moduleIndexPath = 'gravity-mvp/src/modules/messaging/index.ts'
-const consumerPath = 'gravity-mvp/src/instrumentation.ts'
+const consumerPath = 'gravity-mvp/src/instrumentation.node.ts'
 const publicBarrelSpecifier = '@/modules/messaging/public/v1'
 const platformBarrelSpecifier = '@/modules/platform-shell/public/v1'
 const publicCapabilitySpecifier = './delivery-recovery-operations'
@@ -938,10 +938,10 @@ const expectedConsumerBindings = [
         local: '*',
     },
 ].sort(bindingSort)
-const registerContext = { functionDepth: 2, rootFunction: 'register', startupDelay: 5000, interval: null, job: null, namedHelpers: [] }
-const recoveryIntervalContext = { functionDepth: 3, rootFunction: 'register', startupDelay: 5000, interval: 'recoveryInterval', job: null, namedHelpers: [] }
-const recoveryJobContext = { functionDepth: 4, rootFunction: 'register', startupDelay: 5000, interval: 'recoveryInterval', job: 'recovery', namedHelpers: [] }
-const retryJobContext = { functionDepth: 4, rootFunction: 'register', startupDelay: 5000, interval: 'retryInterval', job: 'message_retry', namedHelpers: [] }
+const registerContext = { functionDepth: 2, rootFunction: 'registerNodeRuntime', startupDelay: 5000, interval: null, job: null, namedHelpers: ['registerNodeRuntime'] }
+const recoveryIntervalContext = { functionDepth: 3, rootFunction: 'registerNodeRuntime', startupDelay: 5000, interval: 'recoveryInterval', job: null, namedHelpers: ['registerNodeRuntime'] }
+const recoveryJobContext = { functionDepth: 4, rootFunction: 'registerNodeRuntime', startupDelay: 5000, interval: 'recoveryInterval', job: 'recovery', namedHelpers: ['registerNodeRuntime'] }
+const retryJobContext = { functionDepth: 4, rootFunction: 'registerNodeRuntime', startupDelay: 5000, interval: 'retryInterval', job: 'message_retry', namedHelpers: ['registerNodeRuntime'] }
 const expectedRuntimeModel = [
     {
         name: 'recoverStuckMessagingDeliveriesV1',

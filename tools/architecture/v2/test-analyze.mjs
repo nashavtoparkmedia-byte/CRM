@@ -411,7 +411,7 @@ const exactProductionComposeSites = standaloneSqlSites(
   true,
 )
 assert(exactProductionComposeSites.some((site) => (
-  site.method === 'mixed-script-command:prisma db push' && site.line === 489
+  site.method === 'mixed-script-command:prisma db push' && site.line === 518
 )))
 const exactProductionComposeSurface = classifyTrackedSurface('deploy/docker-compose.production.yml', exactLifecycleRegistry)
 assert.deepEqual({

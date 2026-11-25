@@ -10,7 +10,7 @@ const root = process.cwd()
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const publicPath = 'gravity-mvp/src/modules/operations-observability/public/v1/operational-job-registry.ts'
 const consumers = [
-  'gravity-mvp/src/instrumentation.ts',
+  'gravity-mvp/src/instrumentation.node.ts',
   'gravity-mvp/src/app/api/health/route.ts',
   'gravity-mvp/src/app/monitoring/system-health/actions.ts',
 ]

@@ -388,9 +388,9 @@ const exactRuntimeConsumers = (sources) => {
   }
   const consumerFile = parse(consumerPath, sources.get(consumerPath) ?? '')
   const dynamicImportCountsFor = spec => spec.operation === 'deleteContactForRetentionV1'
-    ? { 'gravity-mvp/src/instrumentation.ts': 1 }
+    ? { 'gravity-mvp/src/instrumentation.node.ts': 1 }
     : spec.operation === 'detachContactConversationsV1'
-      ? { 'gravity-mvp/src/instrumentation.ts': 5 }
+      ? { 'gravity-mvp/src/instrumentation.node.ts': 5 }
       : {}
   const parentPublicIndexFor = spec => path.join(path.dirname(spec.indexPath), '..', 'index.ts')
   const moduleIndexFor = spec => path.join(path.dirname(parentPublicIndexFor(spec)), '..', 'index.ts')
@@ -1268,7 +1268,7 @@ const exactMessagingPromiseNamespaceImport = (record) => {
     && ts.isCallExpression(invocation) && invocation.expression === access && !invocation.questionDotToken
 }
 const exactAdmittedDynamicPublicImports = (sources) => {
-  const instrumentationPath = 'gravity-mvp/src/instrumentation.ts'
+  const instrumentationPath = 'gravity-mvp/src/instrumentation.node.ts'
   const contactsTarget = compositionSpecs[0].indexPath
   const messagingTarget = compositionSpecs[1].indexPath
   const workTarget = compositionSpecs[2].indexPath
@@ -1706,16 +1706,16 @@ export const legacyPrismaContactRetentionPortV1 = {
   ),
   withSource(
     repositorySources,
-    'gravity-mvp/src/instrumentation.ts',
-    repositorySources.get('gravity-mvp/src/instrumentation.ts').replace(
+    'gravity-mvp/src/instrumentation.node.ts',
+    repositorySources.get('gravity-mvp/src/instrumentation.node.ts').replace(
       "const { deactivateContactPhoneV1 } = await import('@/modules/contacts/public/v1')",
       "const contacts = await import('@/modules/contacts/public/v1')\n                const { deactivateContactPhoneV1 } = contacts\n                const hiddenRetentionName = 'deleteContactFor' + 'RetentionV1'\n                void contacts[hiddenRetentionName]",
     ),
   ),
   withSource(
     repositorySources,
-    'gravity-mvp/src/instrumentation.ts',
-    repositorySources.get('gravity-mvp/src/instrumentation.ts').replace(
+    'gravity-mvp/src/instrumentation.node.ts',
+    repositorySources.get('gravity-mvp/src/instrumentation.node.ts').replace(
       '        messaging.registerOutboundConversationPreparerV1(',
       "        const hiddenRetentionName = 'detachContact' + 'ConversationsV1'\n        void messaging[hiddenRetentionName]\n        messaging.registerOutboundConversationPreparerV1(",
     ),

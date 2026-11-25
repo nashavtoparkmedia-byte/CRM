@@ -20,7 +20,7 @@ const implementationHashes = [
 ]
 const retentionPath = 'gravity-mvp/src/lib/RetentionCleanup.ts'
 const publicPath = 'gravity-mvp/src/modules/operations-observability/public/v1/scheduled-maintenance-operations.ts'
-const consumerPath = 'gravity-mvp/src/instrumentation.ts'
+const consumerPath = 'gravity-mvp/src/instrumentation.node.ts'
 const exactFunctions = [
     'runDailyOperationalStabilityCheckV1',
     'runOperationalIntegrityCheckV1',

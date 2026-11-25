@@ -90,7 +90,7 @@ const ACTING_BINDING = 'const acting = await writer()'
 const WRITE_ROLES = "export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']"
 const SID_FORMAT = 'const STAFF_SESSION_SID_PATTERN_V1 = /^[0-9a-f]{64}$/u'
 // The files outside fleet_operations that may hold the whole Fleet module.
-const WHOLE_MODULE_HOLDERS = ['gravity-mvp/src/instrumentation.ts']
+const WHOLE_MODULE_HOLDERS = ['gravity-mvp/src/instrumentation.node.ts']
 const FLEET_SPECIFIER = String.raw`['"](?:@/modules/|(?:\.\./)+(?:modules/)?)fleet-operations/(?:public|application|internal)[^'"]*['"]`
 const WHOLE_MODULE = [
     new RegExp(String.raw`import\s*\*\s*as\s+\w+\s+from\s*${FLEET_SPECIFIER}`, 'u'),

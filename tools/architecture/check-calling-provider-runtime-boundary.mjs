@@ -21,7 +21,7 @@ const publicIndexPath = 'gravity-mvp/src/modules/calling/public/v1/index.ts'
 const consumers = [
   'gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts',
   'gravity-mvp/src/app/api/settings/telephony-status/route.ts',
-  'gravity-mvp/src/instrumentation.ts',
+  'gravity-mvp/src/instrumentation.node.ts',
 ]
 const consumerPolicies = new Map([
   [consumers[0], {
