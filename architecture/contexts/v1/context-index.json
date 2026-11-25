@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "27a40fbda2e7f06a0d690ae7d7b41c855b19927916eca7a4b9f7065c03b1c3a1"
+      "sha256": "e0aa3805389d49b6ed86b5b1e022b45baeca539433b7694acd6b965748e4eebf"
     },
     {
       "context": "telegram_channel",
@@ -84,7 +84,7 @@
   "controls": {
     "context_decisions": {
       "path": "architecture/contexts/v1/context-decisions.json",
-      "sha256": "f08bbd7a278b9174fb4b9138c27509e6da3f7fa3e1b85fd2fd86ca3304b28ea8"
+      "sha256": "a5bf607bbbc45f31cf1d507db67dd2c00bb2f2a5c03e3d0fe90d00c8ddc80434"
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "c3a0fb353100822d310e9b099020f9ab23525f5c05ee2a3d961a2d740f61f6a7"
+      "sha256": "1253236dcec761056ad963df08e208c136dc495177c98a5cf0c62f0c1df29195"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
