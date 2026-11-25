@@ -4889,7 +4889,7 @@
         },
         {
           "path": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-          "previous_source_sha256": "71bf4ea7892c405fda0ef1e4ab6be2b02cebf5de417fbef729ced8fb03958f8",
+          "previous_source_sha256": "71bf4ea7892c405fda0ef1ee4ab6be2b02cebf5de417fbef729ced8fb03958f8",
           "current_source_sha256": "ecd174b58d207ab8556a3e2220162fbe7228b7d5d420acfc5074f01c02f2e1e4",
           "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
           "review_rationale": "Security review approved this exact byte rebind. The bot action ingress fails closed for weak/missing secrets and verifies the caller before processing the JSON request. Ownership, lifecycle and functional owner are unchanged."
