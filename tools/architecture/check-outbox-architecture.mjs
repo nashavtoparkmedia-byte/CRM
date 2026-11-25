@@ -394,6 +394,7 @@ const store = read('gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts
 const consumer = read('gravity-mvp/src/modules/calling/public/v1/outbox-consumers.ts')
 const queues = read('gravity-mvp/src/lib/queue/queues.ts')
 const instrumentation = read('gravity-mvp/src/instrumentation.ts')
+const nodeInstrumentation = read('gravity-mvp/src/instrumentation.node.ts')
 const composition = read('gravity-mvp/src/modules/platform-shell/public/v1/outbox-runtime.ts')
 const manifestAmendments = JSON.parse(read('architecture/events/v1/module-manifest-amendments.json'))
 const finalizationManifestAmendments = JSON.parse(read(
@@ -609,14 +610,37 @@ assertCheck(
     queues.includes('{ jobId: `transcribe-${callId}` }'),
     'stable BullMQ job id missing',
 )
-assertCheck(
-    'publisher is registered at the application composition root',
-    instrumentation.includes('startDomainOutboxPublisherV1')
-        && instrumentation.includes('registerOperationalIntervalV1(outboxInterval)')
-        && composition.includes('callingOutboxPublishersV1')
-        && composition.includes('prismaOutboxStoreV1'),
-    'runtime publisher registration missing',
-)
+function validatePublisherStartup(dispatcher, runtime) {
+    const entry = parse('instrumentation.ts', dispatcher)
+    const node = parse('instrumentation.node.ts', runtime)
+    const register = entry.statements.filter((s) => ts.isFunctionDeclaration(s) && s.name?.text === 'register')
+    assert.equal(register.length, 1)
+    assert(modifiersContain(register[0], ts.SyntaxKind.ExportKeyword))
+    const statements = register[0].body?.statements
+    assert.equal(statements?.length, 1, 'dispatcher must contain only the Node runtime branch')
+    const branch = statements[0]
+    assert(ts.isIfStatement(branch) && !branch.elseStatement && ts.isBlock(branch.thenStatement))
+    assert.equal(branch.expression.getText(entry).replace(/\s/g, ''), "process.env.NEXT_RUNTIME==='nodejs'")
+    const body = branch.thenStatement.statements
+    assert.equal(body.length, 2)
+    assert.match(body[0].getText(entry), /^const\s*\{\s*registerNodeRuntime\s*\}\s*=\s*await\s+import\(['"]\.\/instrumentation\.node['"]\)\s*;?$/)
+    assert.match(body[1].getText(entry), /^await\s+registerNodeRuntime\(\)\s*;?$/)
+    const starts = callsNamed(node, 'startDomainOutboxPublisherV1')
+    assert.equal(starts.length, 1, 'publisher must start exactly once')
+    assert.equal(syntacticallyDead(starts[0]), false)
+    assert.match(starts[0].parent.getText(node), /^outboxInterval\s*=\s*startDomainOutboxPublisherV1\(\)$/)
+    const registrations = callsNamed(node, 'registerOperationalIntervalV1').filter((call) => call.arguments[0]?.getText(node) === 'outboxInterval')
+    assert.equal(registrations.length, 1, 'publisher interval must be registered once')
+    assert.equal(syntacticallyDead(registrations[0]), false)
+    assert(runtime.includes("await import('@/modules/platform-shell/public/v1')"))
+    assert(composition.includes('callingOutboxPublishersV1') && composition.includes('prismaOutboxStoreV1'))
+}
+assertStructuredCheck('publisher is registered at the application composition root', () => validatePublisherStartup(instrumentation, nodeInstrumentation))
+assertStructuredCheck('publisher startup rejects missing dispatcher, missing startup and duplicate startup', () => {
+    assert.throws(() => validatePublisherStartup(instrumentation.replace('await registerNodeRuntime()', 'return'), nodeInstrumentation))
+    assert.throws(() => validatePublisherStartup(instrumentation, nodeInstrumentation.replace('const outboxInterval = startDomainOutboxPublisherV1()', 'const outboxInterval = setInterval(() => {}, 2000)')))
+    assert.throws(() => validatePublisherStartup(instrumentation, nodeInstrumentation.replace('const outboxInterval = startDomainOutboxPublisherV1()', 'const outboxInterval = startDomainOutboxPublisherV1(); startDomainOutboxPublisherV1()')))
+})
 assertCheck(
     'event envelope includes correlation and causation',
     eventContract.includes('correlationId') && eventContract.includes('causationId'),

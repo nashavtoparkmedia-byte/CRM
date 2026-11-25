@@ -6,6 +6,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
+await import('./test-outbox-startup.mjs')
+
 const root = process.cwd()
 const compiler = process.env.YOKO_TSC_PATH
     ?? path.join(root, 'gravity-mvp/node_modules/typescript/bin/tsc')
