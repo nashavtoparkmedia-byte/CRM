@@ -13,6 +13,56 @@
   },
   "surfaces": [
     {
+      "path": "deploy/nginx/entrypoint.d/20-install-auth-files.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "rationale": "Nginx entrypoint copies two existing protected Basic Auth files into the container runtime directory with nginx ownership and mode 0400. It fails if either source is absent and does not write database or provider state.",
+      "classification_artifact": "docs/operations/compensation-edge-perimeter.md",
+      "functional_owner": "platform_operations",
+      "source_sha256": "599acf74cf854b5a668857ea06925f18989991a415a512e2b96ad616591809b5"
+    },
+    {
+      "path": "scripts/diagnose-telegram-token.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator-invoked Telegram getMe diagnostic reads a candidate token from standard input and scoped proxy configuration; it emits only identity or error status and does not write data or start polling.",
+      "classification_artifact": "docs/operations/telegram-token-rotation.md",
+      "functional_owner": "platform_operations",
+      "source_sha256": "507eae0b20a96ec8d6e81b7574d6e72c0fe38a20df5afb7998d0ece9a790519d"
+    },
+    {
+      "path": "scripts/diagnose-telegram-token.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator-invoked wrapper reads a candidate token with terminal echo disabled and sends it by pipe to the getMe diagnostic; it does not persist the token or start polling.",
+      "classification_artifact": "docs/operations/telegram-token-rotation.md",
+      "functional_owner": "platform_operations",
+      "source_sha256": "0db8800686629bbd8f61e0df7c70fedac19989cb2eb8d38ed63abd323f22fe00"
+    },
+    {
+      "path": "scripts/install-telegram-token.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator-invoked token rotation tool validates hidden terminal input and atomically replaces the protected bot environment file while preserving other entries; it does not start the bot or modify the database.",
+      "classification_artifact": "docs/operations/telegram-token-rotation.md",
+      "functional_owner": "platform_operations",
+      "source_sha256": "cf80c9303838c67f27274b7fb1a9ff67fe481bead8cefd7e87eb9c7874352f0d"
+    },
+    {
+      "path": "scripts/verify-yoko-park-token.js",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+      "rationale": "Operator-invoked getMe verification reads the protected bot token and proxy configuration and emits identity status only; it does not write data or start polling.",
+      "classification_artifact": "docs/operations/telegram-token-rotation.md",
+      "functional_owner": "platform_operations",
+      "source_sha256": "dc85215a8c0dcd7d9184b7808cc9c6a852517ab714dea77a5f934a1aeb581c57"
+    },
+    {
       "path": ".agents/skills/yoko-ci-triage/agents/openai.yaml",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -1222,7 +1272,7 @@
       "rationale": "Production compose executes the Yandex fleet Prisma schema command during deployment, so its database write is migration-only rather than application runtime.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "fleet_operations",
-      "source_sha256": "51151a01a03087db975075707c4971199e494163da5904b96724e220c1af99be"
+      "source_sha256": "3cb0ca17888d40622d87e2bb6892b928782da6440f6f741bcbe7862ca1557c14"
     },
     {
       "path": "gravity-mvp/add_partial_index.sql",
