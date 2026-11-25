@@ -515,11 +515,17 @@ assert.deepEqual(
   'resolved non-writes lack one-to-one proof records',
 )
 assert.equal(nonWriteProofs.every((proof) => (
-  ['READ_ONLY_SQL_PROJECTION', 'STATIC_MIXED_SCRIPT_SQL_READ', 'ANALYZER_DETECTOR_LITERAL'].includes(proof.classification)
+  ['READ_ONLY_SQL_PROJECTION', 'STATIC_MIXED_SCRIPT_SQL_READ', 'ANALYZER_DETECTOR_LITERAL', 'EXACT_SESSION_ADVISORY_UNLOCK_NO_DATA_WRITE'].includes(proof.classification)
   && proof.resolved_target && typeof proof.resolved_target === 'object'
   && Array.isArray(proof.evidence) && proof.evidence.length >= 2
   && !unresolvedReviewLanguage.test(JSON.stringify(proof))
 )), true, 'non-write proof registry contains an incomplete or unresolved disposition')
+for (const proof of nonWriteProofs.filter((entry) => entry.classification === 'EXACT_SESSION_ADVISORY_UNLOCK_NO_DATA_WRITE')) {
+  assert.equal(proof.site_signature, '41e67f85acbb39608617966677295157f6e19ba3950978eee1bbf74a1a424c30')
+  assert.equal(proof.source.file, 'tg-bot/src/services/botSingletonLock.js')
+  assert.equal(proof.source.source_sha256, '75efdea387ddf16053c4ad2f2d5f8d8547f13f2cbc14180c17dfa2d8fb120153')
+  assert.deepEqual(proof.resolved_target, { kind: 'SESSION_ADVISORY_LOCK_RELEASE', sql_sha256: '324dfb81b9eb90145ec957cad0e3797f62d233e5bf7ba4e1f70a1d45d6b486f0', functions: ['pg_advisory_unlock'] })
+}
 
 const combinedCapabilities = {
   capabilities: [...(capabilities.capabilities ?? []), ...(reviewedCapabilities.capabilities ?? [])],

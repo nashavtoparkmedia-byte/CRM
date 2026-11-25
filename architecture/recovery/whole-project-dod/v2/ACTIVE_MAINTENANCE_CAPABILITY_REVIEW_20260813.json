@@ -47,9 +47,10 @@
     },
     {
       "capability_id": "mmc.reviewed.v1.fleet_operations.yandex_schema_db_push",
+      "p0_source_rebind_review": "Primary executor reviewed Compose diff: the migration command and target are unchanged; P0 changes shift the source hash and coordinate.",
       "status": "APPROVED",
       "approved": true,
-      "source": { "path": "deploy/docker-compose.production.yml", "source_sha256": "06520d68a83134479578d59293fd340219ecc7df27d4af76d8322994c1f295cb", "entrypoint": "yandex-fleet-scraper production container command", "site_signatures": ["dbe7bfe87476ebbd73448415c7d6553a310424465820ff02a5d21c650b365793"] },
+      "source": { "path": "deploy/docker-compose.production.yml", "source_sha256": "3cb0ca17888d40622d87e2bb6892b928782da6440f6f741bcbe7862ca1557c14", "entrypoint": "yandex-fleet-scraper production container command", "site_signatures": ["ca2d6ec854b6c1988df6560a08cec502c5f279baa5c00e4fcf1859ce9279782d"] },
       "lifecycle": "MIGRATION",
       "lifecycle_evidence_status": "REVIEWED_ACTIVE_DEPLOYMENT_ENTRYPOINT",
       "lifecycle_evidence": "Production compose applies the checked scraper schema before starting the API.",

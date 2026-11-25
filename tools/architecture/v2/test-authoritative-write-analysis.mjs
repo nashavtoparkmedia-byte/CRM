@@ -2,8 +2,20 @@
 
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 
-import { verifyAuthoritativeWriteAnalysis } from './verify-authoritative-write-analysis.mjs'
+import { assertResolvedNonWriteProofs, verifyAuthoritativeWriteAnalysis } from './verify-authoritative-write-analysis.mjs'
+
+const p0Triage = JSON.parse(readFileSync('architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json', 'utf8'))
+const unlockRecord = p0Triage.records.find((entry) => entry.site_signature === '41e67f85acbb39608617966677295157f6e19ba3950978eee1bbf74a1a424c30')
+const unlockProof = p0Triage.non_write_proofs.find((entry) => entry.site_signature === unlockRecord.site_signature)
+const unlockSite = { ...unlockRecord, scope: 'Function:createBotSingletonLock/Function:release' }
+const unlockReview = { records: [unlockRecord], non_write_proofs: [unlockProof] }
+assert.doesNotThrow(() => assertResolvedNonWriteProofs(unlockReview, [unlockSite]))
+assert.throws(() => assertResolvedNonWriteProofs(unlockReview, [{ ...unlockSite, scope: 'Function:other' }]))
+assert.throws(() => assertResolvedNonWriteProofs(unlockReview, [{ ...unlockSite, operations: [{ operation: 'DELETE' }] }]))
+assert.throws(() => assertResolvedNonWriteProofs(unlockReview, [{ ...unlockSite, called_functions: ['pg_advisory_unlock', 'set_config'] }]))
+assert.throws(() => assertResolvedNonWriteProofs(unlockReview, [{ ...unlockSite, sql_sha256: '0'.repeat(64) }]))
 
 const triageSignature = 'accepted-ambiguous'
 const acceptedAmbiguousSite = {
