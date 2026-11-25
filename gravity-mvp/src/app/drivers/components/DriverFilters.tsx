@@ -89,7 +89,7 @@ export function DriverFilters({
         return `${startFormatted} – ${endFormatted}`
     }
 
-    const hasCustomRange = dateRange === -1 || (fromDate && toDate)
+    const hasCustomRange = Boolean(dateRange === -1 || (fromDate && toDate))
 
     return (
         <div className="flex flex-col border-b border-[#E8E8E8] bg-white px-3 py-[2px]">

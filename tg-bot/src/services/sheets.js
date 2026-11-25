@@ -1,13 +1,12 @@
 const { google } = require('googleapis');
-const path = require('path');
 const logger = require('../utils/logger');
-const config = require('../config');
+const { googleServiceAccountOptions } = require('./googleServiceAccount');
 
 // Constants from .env or defaults
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 const SHEET_NAME_SURVEY = process.env.GOOGLE_SHEETS_NAME || 'Лист1';
 const SHEET_NAME_CONNECTION = 'Подключиться из Бота';
-const KEY_FILE = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || 'service-account.json';
+const SERVICE_ACCOUNT_KEY = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '';
 
 // Singleton for auth and sheets
 let authClient = null;
@@ -18,14 +17,17 @@ async function getSheetsApi() {
 
     try {
         const auth = new google.auth.GoogleAuth({
-            keyFile: path.resolve(process.cwd(), KEY_FILE),
+            ...googleServiceAccountOptions(SERVICE_ACCOUNT_KEY, process.cwd()),
             scopes: ['https://www.googleapis.com/auth/spreadsheets']
         });
         authClient = await auth.getClient();
         sheetsApi = google.sheets({ version: 'v4', auth: authClient });
         return sheetsApi;
     } catch (err) {
-        logger.error('Failed to initialize Google Sheets API:', err);
+        const code = typeof err?.message === 'string' && /^GOOGLE_SERVICE_ACCOUNT_KEY_[A-Z_]+$/.test(err.message)
+            ? err.message
+            : 'GOOGLE_SHEETS_AUTH_FAILED';
+        logger.error(`Failed to initialize Google Sheets API (${code})`);
         throw err;
     }
 }
@@ -102,8 +104,8 @@ async function upsertUserRow(userId, username, data, sheetName = SHEET_NAME_SURV
             });
             logger.info(`[Sheets] Updated user ${userId} in ${sheetName}`);
         }
-    } catch (err) {
-        logger.error(`[Sheets] Upsert failed for user ${userId}:`, err);
+    } catch {
+        logger.error('[Sheets] Upsert failed (SHEETS_REQUEST_FAILED)');
         // Do not throw to keep bot alive
     }
 }
@@ -121,7 +123,9 @@ async function exportSurveyToSheets(bot, survey, user, answers, prisma) {
 }
 
 async function initializeSheet() {
-    logger.info('[Sheets Service] API is ready for use');
+    // Credentials and network access are required only when a Sheets operation
+    // is requested. They must not prevent the Telegram bot from starting.
+    logger.info('[Sheets Service] initialized; API authentication is lazy');
     return Promise.resolve();
 }
 

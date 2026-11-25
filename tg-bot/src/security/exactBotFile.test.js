@@ -58,6 +58,7 @@ function fixture(overrides = {}) {
             bot,
             logger,
             environment: { BOT_CRM_SECRET: TEST_SHARED_SECRET, BOT_TOKEN: TOKEN },
+        fetchImpl: (url, options) => globalThis.fetch(url, options),
             ...(overrides.maxBytes === undefined ? {} : { maxBytes: overrides.maxBytes }),
         }),
     };

@@ -21,21 +21,13 @@ const driverOrderScene = require('./handlers/driverOrder');
 const quickLimitScene = require('./handlers/quickLimit');
 const parkSelectScene = require('./handlers/parkSelect');
 
-// SOCKS5 proxy for Telegram API (РКН block bypass).
-// Read TELEGRAM_SOCKS_PROXY from .env, default to local xray on 10808.
-// Setting it to empty string disables the proxy.
+// Proxy is scoped to Telegraf's Telegram API transport only; CRM fetch and
+// PostgreSQL traffic remain direct. Production can use the host Xray HTTP
+// listener, while local environments may keep the optional SOCKS listener.
 const telegrafOptions = {};
-const socksUrl = process.env.TELEGRAM_SOCKS_PROXY ?? 'socks5://127.0.0.1:10808';
-if (socksUrl) {
-    try {
-        const { SocksProxyAgent } = require('socks-proxy-agent');
-        const agent = new SocksProxyAgent(socksUrl);
-        telegrafOptions.telegram = { agent };
-        logger.info('Telegram API via configured SOCKS proxy');
-    } catch (e) {
-        logger.error(`Failed to init configured SOCKS proxy: ${e.message}`);
-    }
-}
+const telegramProxy = require('./services/telegramProxyAgent');
+const proxyAgent = telegramProxy.createTelegramProxyAgent(telegramProxy.getTelegramProxyConfig());
+if (proxyAgent) telegrafOptions.telegram = { agent: proxyAgent };
 
 // Create bot instance
 const bot = new Telegraf(config.botToken, telegrafOptions);

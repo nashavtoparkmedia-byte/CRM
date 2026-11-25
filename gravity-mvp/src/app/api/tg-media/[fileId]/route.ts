@@ -89,7 +89,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ fil
             return NextResponse.json({ error: 'media too large' }, { status: 413 })
         }
 
-        return new NextResponse(bytes, {
+        return new NextResponse(new Uint8Array(bytes), {
             headers: {
                 'Content-Type': contentType,
                 'Content-Length': String(bytes.byteLength),

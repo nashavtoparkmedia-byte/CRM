@@ -13,6 +13,7 @@
  */
 
 const MAX_BYTES = 8 * 1024 * 1024;
+const { telegramFetch } = require('./telegramFetch');
 const { constantTimeSecretEqual, isAcceptableBotCrmSecret } = require('../security/botCrmSecret');
 const FETCH_TIMEOUT_MS = 12_000;
 /** Telegram file ids are URL-safe base64. */
@@ -75,7 +76,13 @@ async function readBoundedBody(response, maxBytes) {
     }
 }
 
-function createExactCrmBotFileHandler({ bot, logger, environment = process.env, maxBytes = MAX_BYTES }) {
+function createExactCrmBotFileHandler({
+    bot,
+    logger,
+    environment = process.env,
+    maxBytes = MAX_BYTES,
+    fetchImpl = telegramFetch,
+}) {
     return async function exactCrmBotFile(req, res) {
         const secret = typeof environment.BOT_CRM_SECRET === 'string' ? environment.BOT_CRM_SECRET.trim() : '';
         if (!isAcceptableBotCrmSecret(secret) || !constantTimeSecretEqual(req.get('x-bot-signature'), secret)) {
@@ -106,7 +113,7 @@ function createExactCrmBotFileHandler({ bot, logger, environment = process.env, 
 
         let response;
         try {
-            response = await fetch(String(link), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+            response = await fetchImpl(String(link), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
         } catch (error) {
             logger.warn(`[crmBotFile] download failed: ${error?.name || 'error'}`);
             return res.status(502).json({ success: false, error: 'TELEGRAM_FILE_DOWNLOAD_FAILED' });

@@ -1,16 +1,21 @@
 # deploy/secrets/
 
-Каталог для **публичных** ключей и сертификатов. См. `docs/SECRETS.md`.
+Каталог содержит публичные ключи и локальные private runtime secrets, которые
+не попадают в Git. См. `docs/SECRETS.md`.
 
 ## Что лежит здесь
 
 - `age-public.key` — публичный age-ключ (получатель шифрования).
   Безопасно держать в git. Используется `backup-*.sh` для шифрования бэкапов.
+- `telegram-bot.env` — credentials только для tg-bot: `BOT_TOKEN` и Xray proxy
+  credentials. Держать с режимом `0600`; файл игнорируется Git. Google
+  service-account JSON относится только к legacy Sheets/export и не является
+  P0 runtime dependency.
 
 ## Что НИКОГДА не лежит здесь
 
 - Приватный age-ключ — только в пасс-менеджере.
-- `.env.production` — в `.gitignore`, лежит в корне репозитория на VPS.
+- Общий `.env.production` — в `.gitignore`, лежит в корне репозитория на VPS.
 - SSH-ключи — у тебя локально и на VPS в `~/.ssh/`.
 
 ## Как сгенерировать age-пару

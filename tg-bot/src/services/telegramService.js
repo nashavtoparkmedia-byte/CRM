@@ -5,6 +5,7 @@
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
+const { telegramFetch } = require('./telegramFetch');
 
 async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -14,7 +15,7 @@ async function callTelegramAPI(botToken, method, payload, retryCount = 0) {
     const url = `https://api.telegram.org/bot${botToken}/${method}`;
 
     try {
-        const response = await fetch(url, {
+        const response = await telegramFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),

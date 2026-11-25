@@ -11,6 +11,7 @@ const serverAuth = require('../../tg-bot-frontend/lib/serverAuth');
 
 const root = resolve(__dirname, '../..');
 const read = relative => readFileSync(resolve(root, relative), 'utf8');
+const readCrm = relative => readFileSync(resolve(root, '..', relative), 'utf8');
 
 function withAuthEnvironment(callback) {
     const previous = {
@@ -320,4 +321,27 @@ test('driver registry sync preserves identity, fails closed and retries historic
     assert.match(service, /\/api\/webhook\/telegram/);
     assert.match(bot, /userService\.syncPendingCrmUsers\(\)/);
     assert.match(bot, /userService\.startPeriodicCrmSync\(\)/);
+});
+
+test('production tg-bot receives its allowlisted env instead of the shared production env file', () => {
+    const compose = readCrm('deploy/docker-compose.production.yml');
+    const service = compose.match(/^  tg-bot:\n([\s\S]*?)(?=^  tg-bot-frontend:)/m)?.[1];
+    assert.ok(service, 'production tg-bot service exists');
+    assert.match(service, /env_file:\n\s+- \.\/secrets\/telegram-bot\.env/);
+    assert.doesNotMatch(service, /\.\.\/\.env\.production/);
+    assert.doesNotMatch(service, /^\s+GOOGLE_SERVICE_ACCOUNT_KEY:/m);
+    for (const secret of [
+        'ALERT_BOT_TOKEN',
+        'ANTHROPIC_API_KEY',
+        'REDIS_PASSWORD',
+        'MEGAFON_SIP_PASSWORD',
+        'MINIO_ROOT_PASSWORD',
+        'MAX_SCRAPER_WEBHOOK_SECRET',
+        'S3_SECRET_KEY',
+    ]) {
+        assert.doesNotMatch(service, new RegExp(`^\\s+${secret}:`, 'm'), `${secret} must not be passed to tg-bot`);
+    }
+    assert.match(service, /BOT_CRM_SECRET:/);
+    assert.match(service, /DATABASE_URL:/);
+    assert.doesNotMatch(readCrm('.env.production.example'), /^GOOGLE_SERVICE_ACCOUNT_KEY=/m);
 });

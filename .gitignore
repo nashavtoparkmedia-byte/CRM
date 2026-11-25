@@ -39,6 +39,8 @@ deploy/nginx/templates/auth/compensation.htpasswd
 deploy/nginx/templates/auth/yoko-crm-staff.htpasswd
 deploy/nginx/templates/yoko-crm-staff.htpasswd
 deploy/nginx/templates/yoko-cash.htpasswd
+deploy/secrets/telegram-bot.env
+deploy/secrets/crm-staff-bootstrap.txt
 
 # IDE / Logs
 **/.vscode/

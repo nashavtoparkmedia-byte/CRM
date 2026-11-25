@@ -39,7 +39,7 @@ test('normalizes the shared CRM origin only for Telegram message forwarding', ()
     }
 });
 
-test('shared production env provisions exact Telegram transport and connection bindings', () => {
+test('production env provisions explicit Telegram transport and connection bindings', () => {
     const envExample = readFileSync(path.join(repositoryRoot, '.env.production.example'), 'utf8');
     const compose = readFileSync(path.join(repositoryRoot, 'deploy/docker-compose.production.yml'), 'utf8');
     const gravityService = compose.split('\n  gravity-mvp:')[1].split('\n  tg-bot:')[0];
@@ -48,7 +48,9 @@ test('shared production env provisions exact Telegram transport and connection b
     assert.match(envExample, /^CRM_TELEGRAM_CONNECTION_ID=driver-bot-primary$/m);
     assert.match(envExample, /^TG_BOT_API_URL=http:\/\/tg-bot:3001$/m);
     assert.match(gravityService, /env_file:\s*\n\s*- \.\.\/\.env\.production/);
-    assert.match(botService, /env_file:\s*\n\s*- \.\.\/\.env\.production/);
+    assert.match(botService, /env_file:\s*\n\s*- \.\/secrets\/telegram-bot\.env/);
+    assert.doesNotMatch(botService, /\.\.\/\.env\.production/);
+    assert.match(botService, /CRM_TELEGRAM_CONNECTION_ID: \$\{CRM_TELEGRAM_CONNECTION_ID:-\}/);
     assert.match(botService, /CRM_WEBHOOK_URL: http:\/\/gravity-mvp:3002(?:\s|$)/);
 });
 
