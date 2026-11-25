@@ -4906,6 +4906,50 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "p0-startup-and-governance-098a8489-20261126",
+      "reviewed_at": "2026-11-26T00:00:00Z",
+      "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+      "role": "PRIMARY_EXECUTOR_REVIEW",
+      "authorization": "OWNER_P0_ARCHITECTURE_GATE_IMPLEMENTATION",
+      "predecessor_review": {
+        "reviewed_by": "YOKO_INTEGRATION_ORCHESTRATOR",
+        "role": "PRIMARY_EXECUTOR_REVIEW",
+        "immutable": true,
+        "note": "Extends the prior P0 review without attributing newly reviewed source bytes or paths to that reviewer."
+      },
+      "reason": "The P0 continuation records the exact denominator preview for clean checkpoint 098a84899877ba18595239d48ce2f049fe54e25c. Node startup is explicitly owned by Platform Shell as the split of its existing instrumentation internal surface. New bot and operations files retain existing context and lifecycle ownership. Five operational scripts received explicit source-bound lifecycle review. The new outbox startup test exercises production source in a sealed VM. The tg-media source rebind is solely a typed byte-array response conversion; it does not change the route owner or authority. No new cross-domain ownership or provider authority is granted.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2886,
+        "tracked_inventory_sha256": "90b78836dd3277b55943b9e508ed18d49a987a4a4ec784e3ba4825938d49cab4",
+        "coverage_sha256": "c4d761dd52c7f50ccf403ea15492f8f64867aef1b1264b94a3ca08610473b273"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2903,
+        "tracked_inventory_sha256": "c9b7cffbaadb8bb1329c29497bbd90c5ac223829bb4c3ccacaa1d9b789058ab9",
+        "coverage_sha256": "dbec1a507ea72733d04c2c3bb39c1d768e2329cda7ab5c0ecca79fea24b207e4"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/tg-media/[fileId]/route.ts",
+          "previous_source_sha256": "016fcdaa74f21d4a928f125247f5bd1f483776aada4eeb1bd9e6ecc91f96998d",
+          "current_source_sha256": "bb5fb992e4d354900fbdffe74806f89d148da0ccbeac27c50b51d283372debe5",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "P0 primary executor reviewed the exact delta: it wraps the same media bytes in Uint8Array for NextResponse compatibility. Media origin restrictions, authentication, error handling, ownership and lifecycle are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
