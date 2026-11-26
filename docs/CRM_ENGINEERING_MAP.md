@@ -24,6 +24,11 @@ Partial update 2026-11-25: the P0 driver connection path is CRM-canonical. `tg-b
 records profile state through the signed `register_bot_user` contract and no longer requires the legacy Google Sheets
 writer for connection registration. Google Sheets remains an optional legacy survey/export surface only; it is not a
 P0 readiness dependency. Verified against candidate `ce425ff252dd9dfd0408ed69fab9e610211af188`.
+Partial update 2026-11-26: the driver-facing Telegram admin is embedded at the CRM apex on same-origin `/bot-admin`.
+`BOT_ADMIN_DOMAIN` remains disabled; Nginx strips the external prefix before proxying to the Next.js admin, whose
+`/bot-admin` base path keeps assets and API routes isolated. The panel retains its own HttpOnly staff session and
+never receives CRM Basic credentials or URL-fragment tokens. This runtime boundary is owned by `telegram_channel`
+plus `deploy/` edge routing; no new domain or service boundary was introduced.
 
 # YOKO CRM — Engineering Map
 
@@ -130,7 +135,7 @@ hint to be checked.
 | `gravity-mvp/prisma/` | `schema.prisma` (135 models) and 53 migration directories | Any schema change (governed — §6.3) |
 | `gravity-mvp/scripts/` | 216 operator/diagnostic/backfill scripts; not in the production image | Looking for an existing operator CLI; do not add casually |
 | `gravity-mvp/test/` | 5 cross-cutting vitest files (MAX delivery) | MAX delivery boundary tests |
-| `tg-bot/` | Separate Node process: Telegraf bot + Express API (3001). `tg-bot-frontend/` is a Next 14 pages-router admin (3004) | Driver-facing Telegram bot, surveys, bot scenes |
+| `tg-bot/` | Separate Node process: Telegraf bot + Express API (3001). `tg-bot-frontend/` is a Next 14 pages-router admin (3004), embedded at CRM same-origin `/bot-admin` | Driver-facing Telegram bot, surveys, bot scenes and staff admin panel |
 | `max-web-scraper/` | Separate Node process: Playwright scraper of MAX web, Express API (3005) | Anything MAX transport-side |
 | `yandex-fleet-scraper/` | Fastify API (3003) + BullMQ/Playwright worker, own SQLite | Yandex Fleet UI scraping checks and driver actions |
 | `avito-worker/` | Avito response collector (Drizzle, Playwright). Not a service in the production compose file | Avito lead intake, worker side |
@@ -361,6 +366,12 @@ Each entry lists what the code actually does.
     `G/app/api/bot-link/route.ts`, `G/app/api/bot-users/route.ts`.
   - `tg-bot/start.js`, `tg-bot/src/bot.js`, `tg-bot/src/app.js`,
     `tg-bot/src/services/crmIntegration.js`, `tg-bot/src/handlers/*`.
+  - `deploy/nginx/templates/crm.conf.template` — same-origin `/bot-admin` edge
+    route; strips the public prefix and keeps the disabled `BOT_ADMIN_DOMAIN`
+    vhost inert.
+  - `tg-bot/tg-bot-frontend/next.config.mjs` — `/bot-admin` base path;
+    `context/AuthContext.js` and `lib/serverAuth.js` keep the panel session
+    HttpOnly.
 - **Owns**: `TelegramConnection`, `DriverTelegram`, `BotUserRegistry`,
   `BotChatMessage`, bot survey tables (`bots`, `surveys`, `questions`, `users`,
   `answers`, `analytics_events`, `broadcasts`, `broadcast_stats`), tg-bot SQLite.
@@ -376,12 +387,21 @@ Each entry lists what the code actually does.
   only when they use the same database. Confirm no legacy receiver uses the bot
   token before launch. CRM media retrieval is relayed through the authenticated
   `tg-bot` file endpoint so the Telegram token stays inside its owning process.
+  The production admin is not a second public service: `/bot-admin` is served by
+  the CRM apex edge, covered by the CRM Basic-auth perimeter, then protected by
+  the frontend's separate HttpOnly staff session. Nginx strips the external
+  prefix before forwarding `/`, `/api`, and `/_next` to port 3004; edge
+  `Authorization` is cleared before upstream. No URL fragment, localStorage
+  token, or public `BOT_ADMIN_DOMAIN` path is part of this contract.
 - **Extension points**: `TelegramChannelDeliveryV1` in
   `channel-delivery-runtime.ts`; a new bot action = a `case` in
   `G/app/api/webhooks/bot/route.ts` + a tg-bot handler.
 - **Tests**: `G/app/tg-actions.identity.test.ts`,
   `G/app/api/webhook/telegram/route.test.ts`, module tests;
-  `tg-bot/src/security/*.test.js`; `check-telegram-*-boundary.mjs`.
+  `tg-bot/src/security/*.test.js`; `check-telegram-*-boundary.mjs`. The P0
+  admin route is verified with `/bot-admin` and asset status checks, CSP and
+  `X-Frame-Options` assertions, login/session/logout smoke checks, and absence
+  checks for localhost, URL-fragment, and CRM-token leakage markers.
 
 ### 2.4 WhatsApp channel (`whatsapp_channel`)
 

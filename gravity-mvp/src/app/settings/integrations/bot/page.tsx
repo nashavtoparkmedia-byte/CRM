@@ -9,7 +9,9 @@ export default async function BotAdminPage() {
 
     // The embedded admin owns its HttpOnly authenticated session. Never place
     // Basic credentials in a URL fragment, browser storage, or iframe props.
-    const iframeSrc = process.env.BOT_ADMIN_URL ?? 'http://localhost:3004'
+    // Keep the admin same-origin when BOT_ADMIN_DOMAIN is intentionally
+    // disabled. The embedded app retains its own HttpOnly staff session.
+    const iframeSrc = process.env.BOT_ADMIN_URL ?? '/bot-admin'
 
     return (
         <PageContainer>

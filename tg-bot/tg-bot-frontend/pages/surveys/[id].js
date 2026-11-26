@@ -137,7 +137,7 @@ export default function SurveyBuilder() {
                 params.set('columns', visibleQIds);
             }
 
-            const backendUrl = `/api/admin/surveys/${surveyId}/export/${encodeURIComponent(fileName)}?${params.toString()}`;
+            const backendUrl = `/bot-admin/api/admin/surveys/${surveyId}/export/${encodeURIComponent(fileName)}?${params.toString()}`;
             window.location.assign(backendUrl);
 
             setShowExportModal(false);
