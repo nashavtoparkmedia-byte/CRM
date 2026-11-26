@@ -27,6 +27,7 @@ fail() { printf "\033[1;31m[fail]\033[0m %s\n" "$*" >&2; exit 1; }
 
 # Map: archive-short-name → volume name
 declare -A SHORT_TO_VOLUME=(
+    [telegram-bot-data]=crm_tg_bot_data
     [gravity-whatsapp]=crm_gravity_whatsapp
     [max-userdata]=crm_max_user_data
     [yfs-chrome-profile]=crm_yfs_chrome_profile
@@ -71,7 +72,11 @@ restore_one() {
     # Найти последний архив этого типа
     local latest; latest=$(rclone lsf "${S3_REMOTE}/${s3_dir}/" --files-only 2>/dev/null \
         | grep "^${short}-" | sort | tail -1)
-    [ -n "$latest" ] || { log "  [skip] нет архивов ${short}-* в ${S3_REMOTE}/${s3_dir}/"; return; }
+    if [ -z "$latest" ]; then
+        [ "$short" != "telegram-bot-data" ] || fail "required Telegram state archive ${short}-* is missing — refusing restore without driver bot state"
+        log "  [skip] нет архивов ${short}-* в ${S3_REMOTE}/${s3_dir}/"
+        return
+    fi
     log "  Latest: ${latest}"
 
     # Скачать

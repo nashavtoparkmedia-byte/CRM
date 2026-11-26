@@ -286,12 +286,11 @@ services:
     image: nginx:1.27-alpine
     container_name: crm-nginx
     restart: unless-stopped
-    # host.docker.internal allows nginx (bridge) to proxy /wss-sip → FS (host network).
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
-      - "80:80"     # HTTP — Let's Encrypt validation + 301 на HTTPS
-      - "443:443"   # HTTPS — основной
+      # Rootless Docker cannot bind host ports below 1024 under the current
+      # unprivileged-port policy. Forward router TCP 80→8080 and 443→8443.
+      - "8080:80"   # HTTP — Let's Encrypt validation + 301 на HTTPS
+      - "8443:443"  # HTTPS — основной
     volumes:
       # conf.d — записываемая, потому что nginx entrypoint envsubst пишет сюда
       # processed templates (NGINX_ENVSUBST_OUTPUT_DIR). default.conf оставляем
@@ -301,6 +300,14 @@ services:
       # Templates — read-only, envsubst читает их и кладёт обработанный
       # результат в /etc/nginx/conf.d/
       - ./nginx/templates:/etc/nginx/templates:ro
+      # Host-managed Basic Auth files are ignored by Git and must be mounted
+      # separately so the rootless entrypoint can copy them into /run with
+      # nginx ownership before workers start.
+      - ./nginx/templates/auth:/etc/nginx/templates/auth:ro
+      # Rootless Docker maps host-owned 0600 files to container root, so nginx
+      # workers cannot read them directly. The entrypoint copies them into
+      # /run with nginx ownership and 0400 permissions before workers start.
+      - ./nginx/entrypoint.d/20-install-auth-files.sh:/docker-entrypoint.d/20-install-auth-files.sh:ro
       - nginx_certs:/etc/letsencrypt
       - nginx_www:/var/www/letsencrypt
     environment:
@@ -376,6 +383,7 @@ services:
       # Docker-internal bot API. Production sets this explicitly so a stale shared
       # value cannot redirect manager identification; the code default matches.
       TG_BOT_API_URL: ${TG_BOT_API_URL:-http://tg-bot:3001}
+      BOT_CRM_SECRET: ${BOT_CRM_SECRET:?BOT_CRM_SECRET must be set in .env.production}
     volumes:
       # Записи звонков и медиа — write-through в S3, но локальный кэш нужен
       - gravity_recordings:/app/recordings
@@ -405,17 +413,38 @@ services:
     container_name: crm-tg-bot
     restart: unless-stopped
     env_file:
-      - ../.env.production
+      - ./secrets/telegram-bot.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       NODE_ENV: production
+      API_PORT: ${API_PORT:-3001}
+      ADMIN_ID: ${ADMIN_ID:-}
+      ADMIN_IDS: ${ADMIN_IDS:-}
+      ADMIN_USER: ${ADMIN_USER:-}
+      ADMIN_PASS: ${ADMIN_PASS:-}
+      ALLOW_LEGACY_WEBHOOK_PATH: ${ALLOW_LEGACY_WEBHOOK_PATH:-false}
+      BOT_ACTIONS_URL: ${BOT_ACTIONS_URL:-}
+      BOT_COMPENSATION_ENTRY_ENABLED: ${BOT_COMPENSATION_ENTRY_ENABLED:-false}
+      BOT_CRM_FORWARD_TIMEOUT_MS: ${BOT_CRM_FORWARD_TIMEOUT_MS:-}
+      BOT_HEARTBEAT_INTERVAL_MS: ${BOT_HEARTBEAT_INTERVAL_MS:-}
+      BOT_REGISTRY_SYNC_INTERVAL_MS: ${BOT_REGISTRY_SYNC_INTERVAL_MS:-}
+      BOT_REFERRAL_ENTRY_ENABLED: ${BOT_REFERRAL_ENTRY_ENABLED:-false}
+      CRM_INTEGRATION_ENABLED: ${CRM_INTEGRATION_ENABLED:-true}
+      CRM_TELEGRAM_CONNECTION_ID: ${CRM_TELEGRAM_CONNECTION_ID:-}
+      TELEGRAM_CONNECTION_ID: ${TELEGRAM_CONNECTION_ID:-}
+      TELEGRAM_BOT_ACCOUNT_ID: ${TELEGRAM_BOT_ACCOUNT_ID:-}
+      GOOGLE_SHEETS_ID: ${GOOGLE_SHEETS_ID:-}
+      GOOGLE_SHEETS_NAME: ${GOOGLE_SHEETS_NAME:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      DEBUG: ${DEBUG:-false}
       # gravity-mvp callbacks — через внутреннюю сеть
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
-      # Update transport. `webhook` requires TELEGRAM_WEBHOOK_URL to be a public
-      # HTTPS endpoint terminated by nginx. Production runs webhook mode, so that
-      # is the default here; a host without inbound TLS sets BOT_UPDATE_MODE
-      # explicitly to `polling` in .env.production.
-      BOT_UPDATE_MODE: ${BOT_UPDATE_MODE:-webhook}
+      # Initial P0 transport is long polling; HTTPS ingress is not required.
+      BOT_UPDATE_MODE: ${BOT_UPDATE_MODE:-polling}
+      # BOT_TOKEN, Telegram HTTP proxy credentials, and the Google service key
+      # come from the tg-bot-only protected env file; transport is scoped to
+      # Telegram requests in code.
+      BOT_CRM_SECRET: ${BOT_CRM_SECRET:?BOT_CRM_SECRET must be set in .env.production}
       TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-https://${BOT_ADMIN_DOMAIN}/api/telegram/webhook}
       # Self-healing: re-assert the webhook registration if Telegram drops it.
       BOT_WEBHOOK_CHECK_INTERVAL_MS: ${BOT_WEBHOOK_CHECK_INTERVAL_MS:-60000}

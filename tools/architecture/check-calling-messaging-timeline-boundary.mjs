@@ -15,7 +15,7 @@ const paths = {
   messagingProjector: 'gravity-mvp/src/modules/messaging/public/v1/completed-call-timeline-projector.ts',
   messagingApplication: 'gravity-mvp/src/modules/messaging/application/messaging-operations.ts',
   messagingIndex: 'gravity-mvp/src/modules/messaging/public/v1/index.ts',
-  instrumentation: 'gravity-mvp/src/instrumentation.ts',
+  instrumentation: 'gravity-mvp/src/instrumentation.node.ts',
 }
 const modules = {
   callingProjection: '@/modules/calling/public/v1/completed-call-timeline-projection',

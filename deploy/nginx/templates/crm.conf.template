@@ -62,19 +62,20 @@ server {
     # a CRM vhost needs a personal login; one htpasswd line per person, logged
     # as $remote_user. The gate sits at server level so a new location is
     # gated unless it opts out. /compensation keeps its own Cash gate below
-    # (a location-level realm with its own user file); /wss-sip (FreeSWITCH,
-    # SIP authentication of its own) opts out; `return` locations such as
+    # (a location-level realm with its own user file); the P0 /wss-sip location
+    # returns 404; `return` locations such as
     # /api/debug-db and /robots.txt answer before the access phase.
     #
-    # The password file is host-managed and never committed (.gitignore):
-    #   deploy/nginx/templates/auth/yoko-crm-staff.htpasswd, 0640 root:101,
-    #   inside the auth/ directory (0710 root:101) so host-side traversal, not
-    #   file ownership, keeps unrelated host accounts away from the hash.
+    # Password files are host-managed, never committed, and bind-mounted
+    # read-only from auth/. Production uses auth/ 0710 and files 0640, root:101;
+    # narrow POSIX ACL entries grant rootless Docker's mapped nginx worker UID
+    # traversal/read without changing those checker-visible modes. Direct
+    # binding keeps credential issue/revoke updates immediate.
     # Every Cash login must also be a staff login, or the /compensation page
     # assets are refused by this gate. The marker header lets an operator
     # prove which configuration the live workers serve.
     auth_basic "YOKO CRM";
-    auth_basic_user_file /etc/nginx/templates/auth/yoko-crm-staff.htpasswd;
+    auth_basic_user_file /run/nginx-auth/yoko-crm-staff.htpasswd;
     add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
     add_header X-Yoko-Edge-Gate "crm-staff-p0-20261025" always;
 
@@ -100,7 +101,7 @@ server {
     # Remove together with the pilot.
     location = /compensation {
         auth_basic           "YOKO compensation";
-        auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
+        auth_basic_user_file /run/nginx-auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
         proxy_set_header Authorization "";
@@ -118,7 +119,7 @@ server {
 
     location ^~ /compensation/ {
         auth_basic           "YOKO compensation";
-        auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
+        auth_basic_user_file /run/nginx-auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
         proxy_set_header Authorization "";
@@ -134,18 +135,9 @@ server {
         proxy_send_timeout 300s;
     }
 
-    # SIP WebSocket: browser connects wss://yokoone.ru/wss-sip
-    # nginx proxies WSS → plain WS → FreeSWITCH on host (host.docker.internal:7080)
-    # FS runs in host network mode so ICE candidates carry the public VPS IP directly.
+    # SIP WebSocket is intentionally unavailable on the P0 public CRM edge.
     location /wss-sip {
-        auth_basic off;
-        proxy_pass http://host.docker.internal:7080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
+        return 404;
     }
 
     location / {
@@ -210,19 +202,18 @@ server {
     # a CRM vhost needs a personal login; one htpasswd line per person, logged
     # as $remote_user. The gate sits at server level so a new location is
     # gated unless it opts out. /compensation keeps its own Cash gate below
-    # (a location-level realm with its own user file); /wss-sip (FreeSWITCH,
-    # SIP authentication of its own) opts out; `return` locations such as
+    # (a location-level realm with its own user file); no SIP proxy is exposed
+    # by this vhost; `return` locations such as
     # /api/debug-db and /robots.txt answer before the access phase.
     #
-    # The password file is host-managed and never committed (.gitignore):
-    #   deploy/nginx/templates/auth/yoko-crm-staff.htpasswd, 0640 root:101,
-    #   inside the auth/ directory (0710 root:101) so host-side traversal, not
-    #   file ownership, keeps unrelated host accounts away from the hash.
+    # Password files are directly bind-mounted read-only. Production source
+    # perms are auth/ 0710 and files 0640, root:101; narrow POSIX ACL entries
+    # grant rootless Docker's mapped nginx worker UID traverse/read access.
     # Every Cash login must also be a staff login, or the /compensation page
     # assets are refused by this gate. The marker header lets an operator
     # prove which configuration the live workers serve.
     auth_basic "YOKO CRM";
-    auth_basic_user_file /etc/nginx/templates/auth/yoko-crm-staff.htpasswd;
+    auth_basic_user_file /run/nginx-auth/yoko-crm-staff.htpasswd;
     add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
     add_header X-Yoko-Edge-Gate "crm-staff-p0-20261025" always;
 
@@ -242,7 +233,7 @@ server {
     # 301. Proxy directives copied verbatim from `location /` below.
     location = /compensation {
         auth_basic           "YOKO compensation";
-        auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
+        auth_basic_user_file /run/nginx-auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
         proxy_set_header Authorization "";
@@ -260,7 +251,7 @@ server {
 
     location ^~ /compensation/ {
         auth_basic           "YOKO compensation";
-        auth_basic_user_file /etc/nginx/templates/auth/compensation.htpasswd;
+        auth_basic_user_file /run/nginx-auth/compensation.htpasswd;
 
         set $gravity_backend "http://gravity-mvp:3002";
         proxy_set_header Authorization "";

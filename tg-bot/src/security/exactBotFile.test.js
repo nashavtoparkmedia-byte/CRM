@@ -15,6 +15,7 @@ const assert = require('node:assert/strict');
 const { createExactCrmBotFileHandler } = require('../services/exactCrmBotFile');
 
 const TOKEN = '123456:AA-secret-bot-token';
+const TEST_SHARED_SECRET = 'unit-test-bot-crm-secret-long-enough-for-auth';
 const FILE_ID = 'AgACAgIAAxkBAAIB_2abc123DEF456ghi';
 
 function responseRecorder() {
@@ -31,7 +32,7 @@ function responseRecorder() {
 
 const NO_HEADER = Symbol('absent');
 
-function request(body, signature = 'shared-secret') {
+function request(body, signature = TEST_SHARED_SECRET) {
     return {
         body,
         get: name => (name === 'x-bot-signature' && signature !== NO_HEADER ? signature : undefined),
@@ -56,7 +57,8 @@ function fixture(overrides = {}) {
         handler: createExactCrmBotFileHandler({
             bot,
             logger,
-            environment: { BOT_CRM_SECRET: 'shared-secret', BOT_TOKEN: TOKEN },
+            environment: { BOT_CRM_SECRET: TEST_SHARED_SECRET, BOT_TOKEN: TOKEN },
+        fetchImpl: (url, options) => globalThis.fetch(url, options),
             ...(overrides.maxBytes === undefined ? {} : { maxBytes: overrides.maxBytes }),
         }),
     };
@@ -73,10 +75,13 @@ function stubFetch(reply) {
             ok: reply.status === undefined || reply.status === 200,
             status: reply.status ?? 200,
             headers: { get: name => (name === 'content-length' ? reply.contentLength ?? null : null) },
-            arrayBuffer: async () => {
-                const bytes = reply.bytes ?? Buffer.from('image-bytes');
-                return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-            },
+            body: new ReadableStream({
+                start(controller) {
+                    const chunks = reply.chunks ?? [reply.bytes ?? Buffer.from('image-bytes')];
+                    for (const chunk of chunks) controller.enqueue(new Uint8Array(chunk));
+                    controller.close();
+                },
+            }),
             __options: options,
         };
     };
@@ -98,7 +103,7 @@ test('refuses a caller with no signature, a wrong one, or no configured secret',
         environment: {},
     });
     const response = responseRecorder();
-    await unconfigured(request({ fileId: FILE_ID }, 'shared-secret'), response);
+    await unconfigured(request({ fileId: FILE_ID }, TEST_SHARED_SECRET), response);
     assert.equal(response.statusCode, 401);
 });
 
@@ -147,10 +152,30 @@ test('serves the bytes as an inert private response', async () => {
     }
 });
 
+test('stops reading an oversized response without Content-Length', async () => {
+    const { handler } = fixture({ maxBytes: 8 });
+    const stub = stubFetch({ chunks: [Buffer.from('12345678'), Buffer.from('9')] });
+    try {
+        const response = responseRecorder();
+        await handler(request({ fileId: FILE_ID }), response);
+        assert.equal(response.statusCode, 413);
+        assert.equal(response.body.error, 'TELEGRAM_FILE_TOO_LARGE');
+    } finally {
+        stub.restore();
+    }
+});
+
 test('takes the content type from the path Telegram chose, never from the caller', async () => {
     const cases = [
         ['photos/file_1.png', 'image/png'],
+        ['videos/file_2.mp4', 'video/mp4'],
+        ['videos/file_3.mov', 'video/quicktime'],
+        ['voice/file_4.ogg', 'audio/ogg'],
+        ['audio/file_5.mp3', 'audio/mpeg'],
         ['documents/file_2.pdf', 'application/pdf'],
+        ['documents/file_6.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        ['documents/file_7.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        ['documents/file_8.zip', 'application/zip'],
         ['animations/file_3.gif', 'image/gif'],
     ];
     for (const [path, expected] of cases) {
@@ -170,7 +195,7 @@ test('takes the content type from the path Telegram chose, never from the caller
 });
 
 test('refuses a media type the CRM will not display', async () => {
-    for (const path of ['voice/file_4.ogg', 'documents/file_5.exe', 'documents/file_6']) {
+    for (const path of ['voice/file_4.svg', 'documents/file_5.exe', 'documents/file_6']) {
         const { handler } = fixture({
             getFileLink: async () => new URL(`https://api.telegram.org/file/bot${TOKEN}/${path}`),
         });

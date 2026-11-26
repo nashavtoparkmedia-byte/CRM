@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 // DEV deploy: отключаем Static Generation для всего приложения.
@@ -18,16 +17,6 @@ import { SipProvider } from '@/modules/calling/public/v1/sip-client-context';
 import IncomingCallPopup from "@/modules/calling/public/v1/client-ui/IncomingCallPopup";
 import ActiveCallPopup from "@/modules/calling/public/v1/client-ui/ActiveCallPopup";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
   title: "Yoko CRM",
   description: "Yandex Dispatch API Testing Tool",
@@ -40,9 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ru">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <QueryProvider>
           <SipProvider>
             <div className="flex min-h-screen bg-background text-foreground">

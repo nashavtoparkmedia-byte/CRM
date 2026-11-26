@@ -4,6 +4,7 @@ const http = require('http');
 const userService = require('../services/userService');
 const sheetsService = require('../services/sheets');
 const logger = require('../utils/logger');
+const { getRequiredBotCrmSecret } = require('../security/botCrmSecret');
 const config = require('../config');
 const { ensureBotMappingV1 } = require('../public-bot-maintenance');
 
@@ -39,7 +40,7 @@ function crmParkRequest(action, payload) {
             port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
             path: parsed.pathname,
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret' }
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-bot-signature': getRequiredBotCrmSecret() }
         }, (res) => {
             let body = '';
             res.on('data', c => body += c);
@@ -321,7 +322,7 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
                     headers: {
                         'Content-Type': 'application/json',
                         'Content-Length': Buffer.byteLength(payloadStr),
-                        'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret'
+                        'x-bot-signature': getRequiredBotCrmSecret()
                     }
                 }, (res) => {
                     if (res.statusCode >= 200 && res.statusCode < 300) {

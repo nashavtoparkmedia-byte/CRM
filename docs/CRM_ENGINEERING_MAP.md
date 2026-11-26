@@ -20,6 +20,10 @@ Partial update 2026-11-08: §2.4 (tests), F-08 and I-09 describe WhatsApp messag
 against its own change on top of main `3ac5ce07`.
 Partial update 2026-11-11: F-08 and I-WA1 (number assigned at landing) describe WhatsApp outbound truth (P-B): own
 messages through `message_create`, acks as S2 delivery evidence, verified against its own change on top of main `05c0419c`.
+Partial update 2026-11-25: the P0 driver connection path is CRM-canonical. `tg-bot/src/handlers/connection.js`
+records profile state through the signed `register_bot_user` contract and no longer requires the legacy Google Sheets
+writer for connection registration. Google Sheets remains an optional legacy survey/export surface only; it is not a
+P0 readiness dependency. Verified against candidate `ce425ff252dd9dfd0408ed69fab9e610211af188`.
 
 # YOKO CRM — Engineering Map
 
@@ -366,7 +370,12 @@ Each entry lists what the code actually does.
   transport id comes only from configuration: `CRM_TELEGRAM_CONNECTION_ID`, read
   by `canonicalTelegramBotConnectionIdV1()`. It is never taken from a stored
   `Chat` or `TelegramConnection` row, and a missing, untrimmed or placeholder
-  value fails closed (`TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN`).
+  value fails closed (`TELEGRAM_BOT_CONNECTION_CONFIG_UNPROVEN`). In polling
+  mode, startup proves the Telegram bot identity before accepting updates and
+  acquires a PostgreSQL advisory lock; the lock prevents concurrent instances
+  only when they use the same database. Confirm no legacy receiver uses the bot
+  token before launch. CRM media retrieval is relayed through the authenticated
+  `tg-bot` file endpoint so the Telegram token stays inside its owning process.
 - **Extension points**: `TelegramChannelDeliveryV1` in
   `channel-delivery-runtime.ts`; a new bot action = a `case` in
   `G/app/api/webhooks/bot/route.ts` + a tg-bot handler.
@@ -1914,26 +1923,70 @@ Each entry: statement — enforcing code — proving test — known exceptions.
 | `minio`, `minio-init` | `minio/minio` | 127.0.0.1:9000/9001 | Recordings |
 | `freeswitch` | `telephony/` | host network | ESL 8021 |
 | `audio-bridge` | `tools/audio-bridge-day1/` | 127.0.0.1:3030 | AI calls |
-| `nginx`, `certs-init` | `nginx:1.27-alpine` | 80, 443 | Templates in `deploy/nginx/templates/` rendered into `conf.d` |
+| `nginx`, `certs-init` | `nginx:1.27-alpine` / `alpine:3.19` | 80, 443 | Host-managed htpasswd files stay directly bind-mounted read-only so credential issue/revoke updates the exact file Nginx reads. Production uses `auth/` 0710 and files 0640, `root:101`, with narrow access ACLs and a default ACL for rootless Docker's mapped nginx worker UID; the default ACL preserves access across atomic credential replacement. An empty compensation file denies all Cash logins until explicitly granted. Templates in `deploy/nginx/templates/` render into `conf.d` |
 | `gravity-mvp` | `gravity-mvp/` | internal 3002 | Runs migrations at start |
 | `tg-bot` | `tg-bot/` | internal 3001 | — |
 | `tg-bot-frontend` | `tg-bot/tg-bot-frontend/` | internal 3004 | — |
 | `yandex-fleet-scraper-api`, `-worker` | `yandex-fleet-scraper/` | internal 3003 | SQLite volume, `prisma db push` |
 | `max-web-scraper` | `max-web-scraper/` | internal | Playwright profile volume |
 
-There is no `avito-worker` service in this file. All app services read
-`../.env.production`.
+There is no `avito-worker` service in this file. App services read
+`../.env.production`; `tg-bot` receives explicit non-key runtime settings from
+that file and reads `BOT_TOKEN` and private Telegram proxy credentials only from
+`deploy/secrets/telegram-bot.env`. The bot does not receive the shared env file
+wholesale. Google Sheets credentials are legacy and are not part of P0 runtime
+or readiness.
+
+The legacy Sheets service is lazy and optional. `initializeSheet()` does not
+call Google APIs during bot startup, and the active driver connection flow does
+not call it: registration is written through the signed CRM `register_bot_user`
+contract. Survey/export helpers may remain unavailable without legacy Google
+credentials and do not block P0 Telegram, CRM or driver identity readiness.
 
 nginx routing (`deploy/nginx/templates/crm.conf.template`,
 `bot-admin.conf.template`): CRM domains → `gravity-mvp:3002`; `/api/debug-db` →
-404; `/compensation` → Basic Auth; `/wss-sip` → FreeSWITCH WSS on the host; bot
+404; `/compensation` → Basic Auth; `/wss-sip` → 404 on the P0 public edge; bot
 admin domain → `tg-bot` (`/api/telegram/`) and `tg-bot-frontend`.
+
+`tg-bot` may route only its Telegram Bot API HTTPS calls through the optional
+`TELEGRAM_HTTP_PROXY` (HTTP CONNECT) or `TELEGRAM_SOCKS_PROXY` transport agent.
+The HTTP endpoint and credentials are read from the tg-bot-only protected env
+file (`deploy/secrets/telegram-bot.env`, mode 0600); the main driver `BOT_TOKEN`
+is stored there as well. Legacy Google Sheets credentials, if ever used for
+non-P0 survey/export maintenance, are outside the P0 gate. `ALERT_BOT_TOKEN` is separate and is used by host-side
+health/deploy/restore notifications. Proxy credentials are attached only to
+Telegram CONNECT requests. Production Compose injects an explicit tg-bot runtime
+allowlist instead of the whole `.env.production`; unrelated SIP, Redis, MinIO,
+AI, backup, MAX, and alert-bot credentials stay outside the bot container. CRM
+callbacks and PostgreSQL connections remain direct on `crm_internal`. Rootless
+containers cannot reach the host's loopback-
+bound Xray listener; use a separate authenticated inbound bound only to the
+Ubuntu LAN address, with no router port forward. See
+`docs/operations/telegram-proxy-rootless-access.md`.
 
 Documented deploy: `scripts/deploy.sh` (fetch, build, migrate, `up -d`, health
 wait). Backups: `scripts/backup-{pg,files,env}.sh`, restore scripts,
-`scripts/health-monitor.sh`. Secrets inventory: `docs/SECRETS.md`. The repository
+`scripts/health-monitor.sh`. The backup scripts require an `age` recipient and
+fail closed if encryption is unavailable. PostgreSQL dumps and Docker-volume
+archives are streamed into `age`; failed remote uploads retain only the encrypted
+local artifact for retry. CRM production builds use the system font stack without
+external font downloads; `src/instrumentation.ts` dispatches Node-only startup
+work through `src/instrumentation.node.ts`. Secrets inventory: `docs/SECRETS.md`. The repository
 documents only this model; anything else about how production is actually released
 is outside this map.
+
+The P0 candidate's clean-schema parity is proven by the repository's canonical
+isolated authority replay, not by running only the active Prisma directory.
+`node tools/architecture/replay-production-migration-authority.mjs
+--allow-isolated-replay` completed with `PASS` against a disposable PostgreSQL:
+62 authority migrations (44 active and 18 archived) plus 12 pending-source
+migrations finished, Prisma datamodel diff was zero, outbox sanity passed, and
+all 12 pending migrations passed injected-failure rollback and retry checks.
+The replay also proved rerun safety and exact source checksums. The separate
+Preview comparison remains zero-diff and up to date. Keep using the explicit
+authority replay for clean-schema parity checks; the archived
+`20260717000000_add_driver_telegram_submitted_phone` migration remains outside
+normal Prisma discovery and must not be applied manually.
 
 ---
 

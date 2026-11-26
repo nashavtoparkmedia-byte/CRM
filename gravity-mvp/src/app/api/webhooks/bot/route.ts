@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { getYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_BOT_USER_PROFILE_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
@@ -33,10 +34,30 @@ import {
     recordDriverActionV1,
 } from '@/modules/fleet-operations/public/v1'
 
+function isAcceptableBotCrmSecret(value: unknown): value is string {
+    if (typeof value !== 'string') return false
+    const secret = value.trim()
+    if (secret.length < 32 || secret.length > 256) return false
+    if (/(?:placeholder|replace[-_ ]?me|change[-_ ]?me|__generate|your[-_ ]?secret)/i.test(secret)) return false
+    return !/^(.)\1+$/.test(secret)
+}
+
+function matchesBotCrmSignature(supplied: string | null, expected: string): boolean {
+    if (!supplied) return false
+    const suppliedBytes = Buffer.from(supplied)
+    const expectedBytes = Buffer.from(expected.trim())
+    return suppliedBytes.length === expectedBytes.length
+        && timingSafeEqual(suppliedBytes, expectedBytes)
+}
+
 export async function POST(request: Request) {
     try {
+        const expectedSignature = process.env.BOT_CRM_SECRET
+        if (!isAcceptableBotCrmSecret(expectedSignature)) {
+            return NextResponse.json({ error: 'Bot authentication is not configured' }, { status: 503 })
+        }
         const signature = request.headers.get('x-bot-signature')
-        if (signature !== process.env.BOT_CRM_SECRET) {
+        if (!matchesBotCrmSignature(signature, expectedSignature)) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 

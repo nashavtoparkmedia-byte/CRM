@@ -11,11 +11,11 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates openssl \
+    ca-certificates openssl python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 # Только production-зависимости — бот не нужен dev tooling
-RUN npm ci --omit=dev --no-audit --no-fund
+RUN npm_config_build_from_source=true npm ci --omit=dev --no-audit --no-fund
 
 # ─── Runner ──────────────────────────────────────────────────────────────────
 FROM node:20-bookworm-slim AS runner

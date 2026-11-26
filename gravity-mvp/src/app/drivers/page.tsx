@@ -2,6 +2,9 @@ import { getDriversWithCells } from './actions'
 import { listOperationalTelegramConnectionsV1 } from '@/infrastructure/telegram/operational-capabilities'
 import DriversClient from './DriversClient'
 import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
+import {
+    IntegrationAdminAuthorizationError,
+} from '@/modules/identity-access/public/v1'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,7 +47,13 @@ export default async function DriversPage({
         excludeInactive,
     })
     
-    const telegramConnections = await listOperationalTelegramConnectionsV1()
+    let telegramConnections: Awaited<ReturnType<typeof listOperationalTelegramConnectionsV1>>
+    try {
+        telegramConnections = await listOperationalTelegramConnectionsV1()
+    } catch (error) {
+        if (!(error instanceof IntegrationAdminAuthorizationError)) throw error
+        telegramConnections = []
+    }
 
     return (
         <PageContainer>

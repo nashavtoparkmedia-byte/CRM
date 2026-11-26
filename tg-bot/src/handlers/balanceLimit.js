@@ -2,11 +2,10 @@ const { Scenes, Markup } = require('telegraf');
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { getRequiredBotCrmSecret } = require('../security/botCrmSecret');
 const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 const CRM_URL = () => process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
-const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
-
 function postJSON(url, body, headers = {}) {
     return new Promise((resolve) => {
         const parsed = new URL(url);
@@ -43,7 +42,7 @@ function postJSON(url, body, headers = {}) {
 async function callCRM(action, payload) {
     logger.info(`[LimitScene] Calling CRM action=${action} url=${CRM_URL()}`);
     const result = await postJSON(CRM_URL(), { action, payload }, {
-        'x-bot-signature': CRM_SECRET()
+        'x-bot-signature': getRequiredBotCrmSecret()
     });
     logger.info(`[LimitScene] CRM response: status=${result.status}`);
     return result;

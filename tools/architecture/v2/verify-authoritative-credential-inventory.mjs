@@ -164,6 +164,7 @@ const UNKNOWN_SEMANTICS_BY_OUTCOME = new Map([
     'SYNTHETIC_ACCEPTANCE_FIXTURE_WRITE_NO_CREDENTIAL_VALUE_ACCESS',
   ])],
   ['STATICALLY_RESOLVABLE', new Set([
+    'POSTGRES_ADVISORY_UNLOCK_NO_CREDENTIAL_VALUE_ACCESS',
     'AUTHORIZATION_DDL_WRITE_NO_CREDENTIAL_VALUE_ACCESS',
     'CLIENT_VERSION_QUERY_NO_DATABASE_OR_CREDENTIAL_ACCESS',
     'DATABASE_DDL_WRITE_NO_CREDENTIAL_VALUE_ACCESS',
@@ -191,6 +192,7 @@ const PRODUCTION_SECRET_SUMMARY_FIELDS = new Map([
 ])
 const UNRESOLVED_REVIEW_LANGUAGE = /(?:UNKNOWN|UNRESOLVED|PENDING)/iu
 const STATIC_AMBIGUITY_METHODS_BY_SEMANTICS = new Map([
+  ['POSTGRES_ADVISORY_UNLOCK_NO_CREDENTIAL_VALUE_ACCESS', /^sql-driver:query$/u],
   ['AUTHORIZATION_DDL_WRITE_NO_CREDENTIAL_VALUE_ACCESS', /^(?:mixed-script-sql:)/u],
   ['CLIENT_VERSION_QUERY_NO_DATABASE_OR_CREDENTIAL_ACCESS', /^dynamic-mixed-database-read:pg_dump$/u],
   ['DATABASE_DDL_WRITE_NO_CREDENTIAL_VALUE_ACCESS', /^(?:\$executeRawUnsafe|mixed-script-sql:database_heredoc)$/u],
@@ -356,6 +358,17 @@ function assertDisposableAcceptanceDatabaseSetup(record, current, context, label
   )
 }
 
+export function assertReviewedAdvisoryUnlock(current, target, readSource) {
+  assert.equal(current.file, 'tg-bot/src/services/botSingletonLock.js', 'advisory unlock path mismatch')
+  assert.equal(current.scope, 'Function:createBotSingletonLock/Function:release', 'advisory unlock scope mismatch')
+  assert.equal(current.method, 'sql-driver:query', 'advisory unlock method mismatch')
+  assert.equal(target?.kind, 'postgres_session_advisory_lock', 'advisory unlock target mismatch')
+  assert.equal(target?.credential_entities_in_scope, false, 'advisory unlock credential scope mismatch')
+  assert.equal(typeof readSource, 'function', 'advisory unlock requires source inspection')
+  const line = String(readSource(current.file)).split(/\r?\n/u)[current.line - 1]?.trim()
+  assert.equal(line, "await active.query('SELECT pg_advisory_unlock($1, $2)', [LOCK_NAMESPACE, LOCK_ID]);", 'advisory unlock statement drift')
+}
+
 function assertAmbiguityOutcomeCompatibility(record, current, context = null) {
   const label = `credential ambiguity review ${current.site_signature}`
   const target = record.resolved_target
@@ -406,6 +419,9 @@ function assertAmbiguityOutcomeCompatibility(record, current, context = null) {
 
   const allowedMethod = STATIC_AMBIGUITY_METHODS_BY_SEMANTICS.get(record.resolved_semantics)
   assert(allowedMethod?.test(current.method), `${label} static outcome is incompatible with the analyzed operation`)
+  if (record.resolved_semantics === 'POSTGRES_ADVISORY_UNLOCK_NO_CREDENTIAL_VALUE_ACCESS') {
+    assertReviewedAdvisoryUnlock(current, target, context?.readSource)
+  }
   if (record.resolved_semantics === 'CLIENT_VERSION_QUERY_NO_DATABASE_OR_CREDENTIAL_ACCESS') {
     assert.equal(current.database_command_intent, 'READ', `${label} client-version outcome contradicts analyzer command intent`)
   }

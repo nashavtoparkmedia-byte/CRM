@@ -1,124 +1,104 @@
-/**
- * PR-Ц: Proxy для TG-вложений по file_id.
- *
- * tg-bot передаёт в webhook file_id из Telegram. Само скачивание делается
- * по запросу когда оператор открывает чат / кликает на вложение:
- *   GET /api/tg-media/<file_id>
- *
- * Поток:
- *   1. Читаем BOT_TOKEN из tg-bot/.env (один раз cached).
- *   2. getFile(file_id) → file_path
- *   3. download https://api.telegram.org/file/bot<TOKEN>/<file_path>
- *   4. Stream response с правильным Content-Type / Content-Disposition
- *
- * Простой in-memory cache file_id→buffer на 5 минут (большинство просмотров
- * подряд в одну сессию).
- */
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import { ProxyAgent, fetch as undiciFetch } from 'undici'
+const MAX_BYTES = 8 * 1024 * 1024
+const ALLOWED_CONTENT_TYPES = new Set([
+    'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+    'video/mp4', 'video/quicktime', 'video/webm',
+    'audio/ogg', 'audio/mpeg', 'audio/mp4',
+    'application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/zip',
+])
 
-let cachedToken: string | null = null
-function getBotToken(): string {
-    if (cachedToken) return cachedToken
-    const envPath = path.resolve(process.cwd(), '../tg-bot/.env')
-    if (!fs.existsSync(envPath)) throw new Error('tg-bot/.env не найден')
-    const content = fs.readFileSync(envPath, 'utf-8')
-    const m = content.match(/^BOT_TOKEN=([^\r\n]+)/m)
-    if (!m) throw new Error('BOT_TOKEN не найден в tg-bot/.env')
-    cachedToken = m[1].trim()
-    return cachedToken
+async function readBoundedBody(response: Response): Promise<Buffer | null> {
+    if (!response.body) return null
+    const reader = response.body.getReader()
+    const chunks: Buffer[] = []
+    let total = 0
+    try {
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            total += value.byteLength
+            if (total > MAX_BYTES) {
+                await reader.cancel().catch(() => {})
+                return null
+            }
+            chunks.push(Buffer.from(value))
+        }
+        return Buffer.concat(chunks, total)
+    } finally {
+        reader.releaseLock()
+    }
 }
 
-const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
-const dispatcher = proxyUrl ? new ProxyAgent(proxyUrl) : undefined
-
-// in-memory cache file_id → {buffer, mimeType, expiresAt}
-const cache = new Map<string, { buffer: Buffer; mimeType: string; filename: string | null; expiresAt: number }>()
-const CACHE_TTL_MS = 5 * 60 * 1000
+function configuredSecret(): string | null {
+    const value = process.env.BOT_CRM_SECRET?.trim()
+    if (!value || value.length < 32 || value.length > 256 || /placeholder|replace[-_ ]?me|change[-_ ]?me|__generate|your[-_ ]?secret/i.test(value) || /^(.)\1+$/.test(value)) {
+        return null
+    }
+    return value
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
     const { fileId } = await params
-    if (!fileId) {
-        return NextResponse.json({ error: 'fileId required' }, { status: 400 })
+    if (!/^[A-Za-z0-9_-]{8,256}$/.test(fileId)) {
+        return NextResponse.json({ error: 'fileId invalid' }, { status: 400 })
     }
 
-    // Cache hit
-    const cached = cache.get(fileId)
-    if (cached && cached.expiresAt > Date.now()) {
-        return new NextResponse(cached.buffer as any, {
-            headers: {
-                'Content-Type': cached.mimeType,
-                'Content-Disposition': cached.filename
-                    ? `inline; filename="${encodeURIComponent(cached.filename)}"`
-                    : 'inline',
-                'Cache-Control': 'private, max-age=300',
-            },
-        })
+    const secret = configuredSecret()
+    const botApiUrl = process.env.TG_BOT_API_URL?.trim()
+    if (!secret || !botApiUrl) {
+        return NextResponse.json({ error: 'media service unavailable' }, { status: 503 })
     }
 
     try {
-        const token = getBotToken()
-        const fetchOpts = dispatcher ? { dispatcher } : {}
-
-        // 1. getFile → file_path
-        const infoResp = await undiciFetch(
-            `https://api.telegram.org/bot${token}/getFile?file_id=${encodeURIComponent(fileId)}`,
-            fetchOpts,
-        )
-        const info: any = await infoResp.json()
-        if (!info.ok) {
-            return NextResponse.json({ error: info.description || 'getFile failed' }, { status: 502 })
+        const baseUrl = new URL(botApiUrl)
+        if (baseUrl.protocol !== 'http:' || baseUrl.hostname !== 'tg-bot' || baseUrl.port !== '3001' ||
+            baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash || baseUrl.pathname !== '/') {
+            return NextResponse.json({ error: 'media service unavailable' }, { status: 503 })
         }
-        const filePath: string = info.result.file_path
-        const fileName: string = filePath.split('/').pop() || 'file'
-        const mimeType = guessMime(fileName)
-
-        // 2. Download file content
-        const fileResp = await undiciFetch(
-            `https://api.telegram.org/file/bot${token}/${filePath}`,
-            fetchOpts,
-        )
-        if (!fileResp.ok) {
-            return NextResponse.json({ error: `download failed: ${fileResp.status}` }, { status: 502 })
-        }
-        const arrayBuf = await fileResp.arrayBuffer()
-        const buffer = Buffer.from(arrayBuf)
-
-        // 3. Cache + respond
-        cache.set(fileId, { buffer, mimeType, filename: fileName, expiresAt: Date.now() + CACHE_TTL_MS })
-        // Чистим истёкшие записи (lazy)
-        if (cache.size > 100) {
-            const now = Date.now()
-            for (const [k, v] of cache.entries()) if (v.expiresAt < now) cache.delete(k)
-        }
-
-        return new NextResponse(buffer as any, {
+        const endpoint = new URL('/api/bot/file', baseUrl)
+        const response = await fetch(endpoint, {
+            method: 'POST',
             headers: {
-                'Content-Type': mimeType,
-                'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
-                'Cache-Control': 'private, max-age=300',
+                'content-type': 'application/json',
+                'x-bot-signature': secret,
+            },
+            body: JSON.stringify({ fileId }),
+            signal: AbortSignal.timeout(15_000),
+            cache: 'no-store',
+        })
+        if (!response.ok) {
+            return NextResponse.json({ error: 'media unavailable' }, {
+                status: response.status === 404 ? 404 : 502,
+                headers: { 'Cache-Control': 'no-store' },
+            })
+        }
+
+        const contentType = response.headers.get('content-type')?.split(';', 1)[0]?.toLowerCase() || ''
+        if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+            return NextResponse.json({ error: 'media type unsupported' }, { status: 502 })
+        }
+        if (!response.body) {
+            return NextResponse.json({ error: 'media service unavailable' }, { status: 502 })
+        }
+        const bytes = await readBoundedBody(response)
+        if (!bytes) {
+            return NextResponse.json({ error: 'media too large' }, { status: 413 })
+        }
+
+        return new NextResponse(new Uint8Array(bytes), {
+            headers: {
+                'Content-Type': contentType,
+                'Content-Length': String(bytes.byteLength),
+                'Cache-Control': 'private, no-store',
+                'X-Content-Type-Options': 'nosniff',
             },
         })
-    } catch (e: any) {
-        console.error('[tg-media] error:', e)
-        return NextResponse.json({ error: e?.message || 'unknown' }, { status: 500 })
+    } catch {
+        // Provider URLs and exception text can contain credential-bearing data.
+        return NextResponse.json({ error: 'media service unavailable' }, { status: 502 })
     }
-}
-
-function guessMime(filename: string): string {
-    const ext = filename.toLowerCase().split('.').pop() || ''
-    const map: Record<string, string> = {
-        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
-        mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
-        ogg: 'audio/ogg', oga: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4',
-        pdf: 'application/pdf',
-        doc: 'application/msword',
-        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        xls: 'application/vnd.ms-excel',
-        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        zip: 'application/zip',
-    }
-    return map[ext] || 'application/octet-stream'
 }

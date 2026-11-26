@@ -22,7 +22,7 @@
       "responsibility": "Application composition, shared UI primitives and framework bootstrapping; no business-data ownership.",
       "technical_modules": ["gravity_core", "gravity_ui"],
       "public_surface": ["PlatformHealth.v1", "UiComposition.v1"],
-      "internal_surface": ["gravity-mvp/src/components", "gravity-mvp/src/app/layout.tsx", "gravity-mvp/src/instrumentation.ts"],
+      "internal_surface": ["gravity-mvp/src/components", "gravity-mvp/src/app/layout.tsx", "gravity-mvp/src/instrumentation.ts", "gravity-mvp/src/instrumentation.node.ts"],
       "allowed_dependencies": ["identity_access", "contacts", "fleet_operations", "work_management", "messaging", "calling", "ai_knowledge", "analytics_reporting", "operations_observability", "configuration"],
       "forbidden_dependencies": ["channel_provider_internal", "scraper_session_internal"],
       "providers": [],

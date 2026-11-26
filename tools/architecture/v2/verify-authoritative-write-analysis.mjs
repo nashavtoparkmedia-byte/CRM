@@ -126,7 +126,7 @@ function exactMaintenanceWrites(site, triageRecord) {
   }))
 }
 
-function assertResolvedNonWriteProofs(triage, currentAmbiguous) {
+export function assertResolvedNonWriteProofs(triage, currentAmbiguous) {
   const resolvedRecords = (triage.records ?? []).filter((record) => record.semantic_state === 'RESOLVED_NON_WRITE')
   const proofs = triage.non_write_proofs ?? []
   assert.deepEqual(
@@ -158,6 +158,21 @@ function assertResolvedNonWriteProofs(triage, currentAmbiguous) {
     assert.equal((site.operations ?? []).length, 0, `non-write proof cannot suppress an analyzed write operation: ${record.site_signature}`)
     const calledFunctions = site.called_functions ?? []
     assert.deepEqual(calledFunctions, [...new Set(calledFunctions)].sort(), `analyzed SQL function set is not exact and sorted: ${record.site_signature}`)
+    if (proof.classification === 'EXACT_SESSION_ADVISORY_UNLOCK_NO_DATA_WRITE') {
+      // This releases a session lock: it is not a read-only function. Permit only
+      // the reviewed exact site and SQL, never the function in general.
+      assert.equal(site.site_signature, '41e67f85acbb39608617966677295157f6e19ba3950978eee1bbf74a1a424c30')
+      assert.equal(site.file, 'tg-bot/src/services/botSingletonLock.js')
+      assert.equal(site.scope, 'Function:createBotSingletonLock/Function:release')
+      assert.equal(site.method, 'sql-driver:query')
+      assert.equal(site.source_sha256, '75efdea387ddf16053c4ad2f2d5f8d8547f13f2cbc14180c17dfa2d8fb120153')
+      assert.equal(site.sql_sha256, '324dfb81b9eb90145ec957cad0e3797f62d233e5bf7ba4e1f70a1d45d6b486f0')
+      assert.equal(site.sql_provenance_sha256, '9a6829aa9b5a61314740612c08fd8906947dab654fcac180b1b9201af661c4fc')
+      assert.deepEqual(calledFunctions, ['pg_advisory_unlock'])
+      assert.deepEqual(site.tables, [])
+      assert.deepEqual(proof.resolved_target, { kind: 'SESSION_ADVISORY_LOCK_RELEASE', sql_sha256: site.sql_sha256, functions: calledFunctions })
+      continue
+    }
     assert.equal(calledFunctions.every((name) => REVIEWED_READ_ONLY_SQL_FUNCTIONS.has(name)), true, `non-write proof invokes a function outside the independent read-only allowlist: ${record.site_signature}`)
     if ((site.ambiguity_reasons ?? []).includes('select_function_side_effect_unresolved')) {
       assert.equal(calledFunctions.length > 0, true, `function-side-effect ambiguity lacks exact analyzer-derived functions: ${record.site_signature}`)

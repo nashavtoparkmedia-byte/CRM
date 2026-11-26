@@ -69,8 +69,9 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 
 | Секрет | Где используется | Уровень |
 |--------|------------------|---------|
-| `BOT_TOKEN` (рабочий бот водителей) | tg-bot | **C** — кто угодно сможет писать от имени бота |
-| `BOT_TOKEN` (`@yoko_park_bot` — алертный) | health-monitor.sh | **C** |
+| `BOT_TOKEN` (рабочий бот водителей) | tg-bot | **C** — кто угодно сможет писать от имени бота; `deploy/secrets/telegram-bot.env` (0600) |
+| `TELEGRAM_HTTP_PROXY_USER`, `TELEGRAM_HTTP_PROXY_PASSWORD` | tg-bot → authenticated private Xray HTTP inbound | **H** — `deploy/secrets/telegram-bot.env` (0600), encrypted by `scripts/backup-env.sh` |
+| `ALERT_BOT_TOKEN` (health-monitor alerts) | `scripts/health-monitor.sh`, deploy/restore alerts | **C** |
 | `ADMIN_PASS`, `ADMIN_USER` | Gravity integration-admin login and tg-bot server-side admin authentication | **C** |
 | `ADMIN_SESSION_SECRET` | подпись HttpOnly-сессии tg-bot frontend (при отсутствии сессия подписывается `ADMIN_PASS`) | **C** |
 | `STAFF_SESSION_SECRET` | Gravity Staff Session v1: подпись индивидуальной сессии сотрудника (`__Host-yoko_staff_session`). Не логин и не пароль; ≥ 32 байт, не placeholder, не равен `ADMIN_PASS` / `MOBILE_ACCESS_PASS` / `BOT_CRM_SECRET` — иначе lane не работает (fail closed). Пока не задан, Staff Session спит (docs/design/staff-session-v1.md) | **C** |
@@ -88,6 +89,12 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | `ADMIN_IDS` (список Telegram ID админов) | tg-bot | M — это не секрет, но не публикуем |
 | `BOT_CRM_SECRET` | tg-bot ↔ gravity-mvp (межсервисная авторизация) | **C** |
 | `CRM_TELEGRAM_CONNECTION_ID` | стабильная общая привязка рабочего Bot API транспорта в tg-bot и gravity-mvp | M |
+
+Production Compose does not load the full `.env.production` into `tg-bot`.
+It passes only the bot's explicit runtime allowlist and the protected
+`deploy/secrets/telegram-bot.env`; the database credential is needed by the bot
+only inside `DATABASE_URL`. SIP, Redis, MinIO, AI, backup, MAX, and alert-bot
+credentials are not injected into the bot container.
 
 ### 2.3 WhatsApp
 
@@ -146,15 +153,21 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 
 | Секрет | Где используется | Уровень |
 |--------|------------------|---------|
-| `MEGAFON_SIP_USERNAME`, `MEGAFON_SIP_PASSWORD` (МультиФон Бизнес) | Контейнер `crm-freeswitch`: `MEGAFON_SIP_PASSWORD` читается при старте (`vars.xml` exec-set → `megafon.xml`); образ не запускается при пустом значении или заглушке. Значение хранится в `.env.production`, который через общий `env_file` получают ещё семь сервисов: audio-bridge, gravity-mvp, tg-bot, tg-bot-frontend, yandex-fleet-scraper-api, yandex-fleet-scraper-worker, max-web-scraper. gravity-mvp в режиме env отдаёт значение ролям «Администратор» и «Руководитель» через `GET /api/settings/telephony-connection?reveal=1`. Доступ к ESL (`ESL_PASSWORD`) равносилен доступу к паролю транка (`global_getvar megafon_password`). Логин пока задан в `megafon.xml`. | **C** — доступ к исходящим звонкам, реальные деньги |
-| `ESL_PASSWORD` (FreeSWITCH Event Socket Library) | tg-bot / audio-bridge | H |
+| `MEGAFON_SIP_USERNAME`, `MEGAFON_SIP_PASSWORD` (МультиФон Бизнес) | Контейнер `crm-freeswitch`: `MEGAFON_SIP_PASSWORD` читается при старте (`vars.xml` exec-set → `megafon.xml`); образ не запускается при пустом значении или заглушке. Значение хранится в `.env.production`, который через общий `env_file` получают ещё шесть сервисов: audio-bridge, gravity-mvp, tg-bot-frontend, yandex-fleet-scraper-api, yandex-fleet-scraper-worker, max-web-scraper. `tg-bot` получает только явные runtime-переменные. gravity-mvp в режиме env отдаёт значение ролям «Администратор» и «Руководитель» через `GET /api/settings/telephony-connection?reveal=1`. Доступ к ESL (`ESL_PASSWORD`) равносилен доступу к паролю транка (`global_getvar megafon_password`). Логин пока задан в `megafon.xml`. | **C** — доступ к исходящим звонкам, реальные деньги |
+| `ESL_PASSWORD` (FreeSWITCH Event Socket Library) | FreeSWITCH / audio-bridge | H |
 | coturn shared secret | TURN-relay | H |
 
-### 2.10 Google Sheets (опросы водителей)
+### 2.10 Google Sheets (legacy, вне P0)
+
+Google Sheets больше не является каноническим источником регистрации водителей
+и не входит в P0 readiness gates. CRM `register_bot_user` — канонический путь
+профиля и Telegram-идентичности. Эти значения не требуются для запуска CRM или
+основного Telegram runtime; таблица ниже описывает только необязательный legacy
+export/survey-код.
 
 | Секрет | Где используется | Уровень |
 |--------|------------------|---------|
-| `GOOGLE_SERVICE_ACCOUNT_KEY` (JSON service account) | tg-bot | H |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` (JSON service account) | tg-bot | H — `deploy/secrets/telegram-bot.env` (0600), encrypted by `scripts/backup-env.sh`; never the shared `.env.production` |
 | `GOOGLE_SHEETS_ID`, `GOOGLE_SHEETS_NAME` | tg-bot | M |
 
 ### 2.11 Хранилище бэкапов (Selectel S3)

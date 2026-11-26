@@ -21,6 +21,7 @@ const {
 
 const BOT_ACCOUNT = 8447212640;
 const BOT_CONNECTION = 'driver-bot-primary';
+const TEST_BOT_CRM_SECRET = 'unit-test-bot-crm-secret-long-enough-for-auth';
 
 function telegramUpdate(overrides = {}) {
     return {
@@ -67,7 +68,7 @@ function withEnv(url, extra = {}) {
     const previous = { ...process.env };
     process.env.CRM_WEBHOOK_URL = url;
     process.env.CRM_TELEGRAM_CONNECTION_ID = BOT_CONNECTION;
-    process.env.BOT_CRM_SECRET = 'test-bot-secret';
+    process.env.BOT_CRM_SECRET = TEST_BOT_CRM_SECRET;
     Object.assign(process.env, extra);
     return () => {
         for (const key of Object.keys(process.env)) {
@@ -99,7 +100,7 @@ test('a 2xx forward reports success after exactly one request', async () => {
         assert.equal(result.status, 200);
         assert.equal(result.attempts, 1);
         assert.equal(crm.received.length, 1);
-        assert.equal(crm.received[0].signature, 'test-bot-secret');
+        assert.equal(crm.received[0].signature, TEST_BOT_CRM_SECRET);
         assert.equal(crm.received[0].payload.connectionId, BOT_CONNECTION);
         assert.equal(crm.received[0].payload.providerAccountId, String(BOT_ACCOUNT));
         assert.equal(crm.received[0].payload.providerEventId, 'update:1001');

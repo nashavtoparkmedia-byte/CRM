@@ -7,6 +7,7 @@
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { getRequiredBotCrmSecret } = require('../security/botCrmSecret');
 
 const CRM_URL = () => process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
 
@@ -38,6 +39,12 @@ async function isCrmAlive() {
 }
 
 function pingCrm() {
+    let secret;
+    try {
+        secret = getRequiredBotCrmSecret();
+    } catch {
+        return Promise.resolve(false);
+    }
     return new Promise((resolve) => {
         const url = CRM_URL();
         let parsed;
@@ -52,7 +59,7 @@ function pingCrm() {
             headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(data),
-                'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret'
+                'x-bot-signature': secret
             }
         };
 

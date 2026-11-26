@@ -18,19 +18,18 @@
 //   - each gated location repeats its vhost's generic proxy directives
 //     verbatim, so the functional delta for the route is exactly "+ Basic
 //     Auth" and nothing about proxying silently changed;
-//   - the password file is read from the dedicated auth directory on the
-//     read-only templates mount and never from the writable conf.d output
-//     directory, and no credential material is committed. The auth directory
-//     exists so that host-side traversal, not file ownership, is what keeps
-//     unrelated host accounts away from the hash.
+//   - the password file comes from the dedicated read-only auth mount and is
+//     copied by the reviewed entrypoint to a worker-readable private runtime
+//     directory; no credential material is committed.
 
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
 const TEMPLATE = 'deploy/nginx/templates/crm.conf.template'
 const EXPECTED_SELECTORS = ['= /compensation', '^~ /compensation/']
-const CREDENTIAL_PATH = '/etc/nginx/templates/auth/compensation.htpasswd'
+const CREDENTIAL_PATH = '/run/nginx-auth/compensation.htpasswd'
 
 const checks = []
 const failures = []
@@ -113,15 +112,25 @@ for (const [index, entries] of proxyingVhosts.entries()) {
     }
 }
 
-// The credential is host-managed. It must be read from the read-only templates
-// mount, never from conf.d, which the entrypoint writes into, and the template
-// itself must never carry credential material.
+// The rootless entrypoint must copy from the dedicated read-only mount into a
+// private directory before nginx workers start. Pin the reviewed script exactly
+// so a change to ownership, permissions or fail-closed handling requires review.
+const authInstaller = readFileSync('deploy/nginx/entrypoint.d/20-install-auth-files.sh', 'utf8')
+const compose = readFileSync('deploy/docker-compose.production.yml', 'utf8')
+const safeAuthInstallation = (script, configuration) => (
+    createHash('sha256').update(script).digest('hex') === '599acf74cf854b5a668857ea06925f18989991a415a512e2b96ad616591809b5'
+    && configuration.includes('./nginx/templates/auth:/etc/nginx/templates/auth:ro')
+    && configuration.includes('./nginx/entrypoint.d/20-install-auth-files.sh:/docker-entrypoint.d/20-install-auth-files.sh:ro')
+)
+assert.equal(safeAuthInstallation(authInstaller, compose), true, 'reviewed rootless auth installation drift')
+assert.equal(safeAuthInstallation(authInstaller.replace('-m 0400', '-m 0644'), compose), false)
+assert.equal(safeAuthInstallation(authInstaller, compose.replace('/etc/nginx/templates/auth:ro', '/etc/nginx/templates/auth:rw')), false)
 check(
-    'credential is read from the dedicated auth directory on the read-only mount',
+    'credential is read from the private runtime directory installed from the read-only auth mount',
     source.includes(`auth_basic_user_file ${CREDENTIAL_PATH};`)
         && !/auth_basic_user_file\s+\/etc\/nginx\/conf\.d/u.test(source)
         && !/auth_basic_user_file\s+\/etc\/nginx\/templates\/[^/]+;/u.test(source),
-    'the password file must live in the auth subdirectory of the templates mount',
+    'the password file must be installed into the private runtime auth directory',
 )
 
 const HASH = /\$(2[aby]|apr1|[156])\$|\{SHA\}/u

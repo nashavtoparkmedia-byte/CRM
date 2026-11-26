@@ -13,6 +13,7 @@
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { getRequiredBotCrmSecret } = require('../security/botCrmSecret');
 
 const CRM_URL = () => {
     if (process.env.BOT_ACTIONS_URL) return process.env.BOT_ACTIONS_URL;
@@ -25,8 +26,6 @@ const CRM_URL = () => {
     }
     return 'http://localhost:3002/api/webhooks/bot';
 };
-
-const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
 
 function postJSON(url, body, headers = {}) {
     return new Promise((resolve) => {
@@ -70,7 +69,7 @@ function postJSON(url, body, headers = {}) {
  * caller cannot mistake "the CRM never answered" for "the CRM said no".
  */
 async function callCRM(action, payload) {
-    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': CRM_SECRET() });
+    const result = await postJSON(CRM_URL(), { action, payload }, { 'x-bot-signature': getRequiredBotCrmSecret() });
     logger.info(`[crmAction] ${action}: status=${result.status}`);
     if (!result.ok) {
         const error = new Error(`CRM action ${action} failed with status ${result.status}`);

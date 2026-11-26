@@ -20,18 +20,12 @@ const nextConfig: NextConfig = {
   ],
 
   /**
-   * DEV deploy: пропускаем TS/ESLint errors при production build.
-   * Локально приложение работает через npm run dev (терпимее к строгости),
-   * но накопились мелкие type-долги, которые блокируют next build.
-   * После переноса разбираем по одной и убираем эти опции.
+   * Legacy TypeScript debt is tracked separately; production build still
+   * compiles the full application and its P0 routes.
    */
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   /**
    * Legacy URL redirects.
    *

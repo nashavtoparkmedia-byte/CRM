@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { isAcceptableWebhookSecret } = require('../security/webhookAuth');
 
 const DEFAULT_ALLOWED_UPDATES = ['message', 'callback_query'];
 const DEFAULT_CHECK_INTERVAL_MS = 60_000;
@@ -34,6 +35,7 @@ function createBotRuntime(options = {}) {
     );
 
     let bot = null;
+    let dispatchUpdate = null;
     let watchdog = null;
     let repairInFlight = null;
     let pollingStarted = false;
@@ -54,6 +56,7 @@ function createBotRuntime(options = {}) {
 
     function attach(instance) {
         bot = instance;
+        dispatchUpdate = instance.handleUpdate.bind(instance);
     }
 
     function requireBot() {
@@ -67,6 +70,9 @@ function createBotRuntime(options = {}) {
             throw new Error('TELEGRAM_WEBHOOK_URL must be an HTTPS URL in webhook mode');
         }
         if (!botToken) throw new Error('BOT_TOKEN is required');
+        if (!isAcceptableWebhookSecret(webhookSecret)) {
+            throw new Error('TELEGRAM_WEBHOOK_SECRET_INVALID');
+        }
     }
 
     function matchesToken(token) {
@@ -74,7 +80,7 @@ function createBotRuntime(options = {}) {
     }
 
     function validateWebhookSecret(value) {
-        return safeEqual(value, webhookSecret);
+        return isAcceptableWebhookSecret(webhookSecret) && safeEqual(value, webhookSecret);
     }
 
     function updateKey(updateId) {
@@ -121,8 +127,9 @@ function createBotRuntime(options = {}) {
         return Boolean(botIdentity);
     }
 
-    async function handleUpdate(update) {
+    async function handleUpdate(update, dispatch = dispatchUpdate) {
         const instance = requireBot();
+        if (typeof dispatch !== 'function') throw new Error('TELEGRAM_UPDATE_DISPATCH_UNAVAILABLE');
         // Fail closed until identity is proven, so no update can fall into
         // Telegraf's lazy getMe. The watchdog keeps retrying, so this clears
         // without a restart.
@@ -135,7 +142,7 @@ function createBotRuntime(options = {}) {
             // Nothing to deduplicate on. Run it, but never record a reservation
             // that a later update could collide with.
             lastUpdateAt = new Date().toISOString();
-            await instance.handleUpdate(update);
+            await dispatch(update);
             return { duplicate: false };
         }
 
@@ -149,7 +156,7 @@ function createBotRuntime(options = {}) {
         // past it and start a second execution.
         const execution = (async () => {
             lastUpdateAt = new Date().toISOString();
-            await instance.handleUpdate(update);
+            await dispatch(update);
             markCompleted(key);
             return { duplicate: false };
         })();
@@ -317,6 +324,10 @@ function createBotRuntime(options = {}) {
             return;
         }
 
+        // Polling update dispatch is guarded by the same proven bot identity as
+        // webhook delivery. Establish it before changing Telegram's receiver
+        // mode or accepting updates.
+        await ensureBotIdentity();
         await instance.telegram.deleteWebhook({ drop_pending_updates: false }).catch((error) => {
             runtimeLogger.warn(`[Polling] deleteWebhook failed: ${error.message}`);
         });

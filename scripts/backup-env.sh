@@ -11,6 +11,7 @@
 #
 # Что бэкапит (всё что чувствительное и НЕ в git):
 #   - .env.production
+#   - deploy/secrets/telegram-bot.env (if present)
 #   - deploy/nginx/*.conf
 #   - /etc/xray/config.json (если есть)
 #   - /etc/freeswitch/ (конфиги SIP)
@@ -32,6 +33,7 @@ S3_REMOTE="${BACKUP_S3_REMOTE:-selectel:crm-backups}"
 # ─── 1. Проверка age public key ──────────────────────────────────────────────
 AGE_PUBKEY_FILE="deploy/secrets/age-public.key"
 [ -f "${AGE_PUBKEY_FILE}" ] || fail "Нет ${AGE_PUBKEY_FILE} — нечем шифровать. См. docs/SECRETS.md, раздел 1"
+command -v age >/dev/null 2>&1 || fail "age не установлен"
 
 AGE_PUBKEY=$(grep -E '^age1' "${AGE_PUBKEY_FILE}" | head -1)
 [ -n "${AGE_PUBKEY}" ] || fail "В ${AGE_PUBKEY_FILE} нет age1... ключа"
@@ -41,6 +43,7 @@ log "Recipient: ${AGE_PUBKEY:0:20}..."
 # ─── 2. Собираем чувствительные файлы ────────────────────────────────────────
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 WORK_DIR=$(mktemp -d)
+chmod 700 "${WORK_DIR}"
 trap "rm -rf '${WORK_DIR}'" EXIT
 STAGE="${WORK_DIR}/env-${STAMP}"
 mkdir -p "${STAGE}"
@@ -49,6 +52,15 @@ mkdir -p "${STAGE}"
 if [ -f .env.production ]; then
     cp .env.production "${STAGE}/.env.production"
     log "  + .env.production"
+fi
+
+# tg-bot-only credentials, including BOT_TOKEN and the authenticated Xray
+# HTTP-proxy credentials. The archive is encrypted below; never log values.
+if [ -f deploy/secrets/telegram-bot.env ]; then
+    mkdir -p "${STAGE}/deploy/secrets"
+    cp deploy/secrets/telegram-bot.env "${STAGE}/deploy/secrets/telegram-bot.env"
+    chmod 0600 "${STAGE}/deploy/secrets/telegram-bot.env"
+    log "  + deploy/secrets/telegram-bot.env"
 fi
 
 # .env по сервисам (на dev-машине, на VPS их не будет — это норм)

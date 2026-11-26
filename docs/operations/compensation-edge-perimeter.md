@@ -41,42 +41,18 @@ Host-managed, never in Git, never in application environment.
 |---|---|
 | host path | `deploy/nginx/templates/auth/compensation.htpasswd` |
 | path in container | `/etc/nginx/templates/auth/compensation.htpasswd` |
-| mount | the existing `./nginx/templates:/etc/nginx/templates:ro` bind — **read-only**, no compose change |
-| directory | `auth/` — `0710 root:101` |
-| file | `0640 root:101` |
+| source | the same files Nginx reads, through `./nginx/templates:/etc/nginx/templates:ro` |
+| host directory/files | `auth/` is `root:101 0710`; both files are `root:101 0640` |
+| rootless access | a named ACL grants the host-mapped Nginx worker UID directory traversal and file read; a default ACL keeps atomic replacements readable |
 | format | bcrypt (`$2b$`, cost 12) |
 
-**The gate is directory traversal, not file ownership, and host UID 101 owns
-nothing.** That distinction is the whole point. Without user namespaces —
-and this host has none — container UID 101 *is* host UID 101, which is
-`systemd-resolve`, an active, network-facing daemon. A file merely *owned* by
-UID 101 is therefore readable by that daemon no matter how tight its mode is:
-`0400` protects against everyone except the owner, and here the owner is a
-running service. Ownership by 101 was rejected for exactly this reason.
-
-With `auth/` at `0710 root:101`, `others` have no traverse bit, so an unrelated
-host account cannot enter the directory and cannot open the file whatever its
-mode. Inside the container the nginx worker runs uid 101 **gid 101**, matches
-the directory's group, traverses, and reads the file by group permission.
-
-Rejected alternatives, with the measured reason: `0644` makes the hash
-world-readable; `root:root 0640` and `root:root 0400` fail outright (500),
-because the worker rather than the master opens the file; `101:0 0400` under
-world-traversable parents is readable by `systemd-resolved`.
-
-### Activation preflight — fail closed
-
-An empty `/etc/group` member list for GID 101 is **not** sufficient proof of
-isolation. Before activation, a read-only preflight must confirm that **no
-unrelated non-root host process** has GID 101 as its real, effective,
-saved/fs, or supplementary group. If any does, activation must abort: that
-process would gain read access to the hash through the directory's group bit.
-Root access is outside this boundary and is expected.
-
-This residual exists only because container and host share a UID/GID space.
-Userns remapping or a dedicated uid would remove it; that is an infrastructure
-decision beyond this pilot, and the preflight is what makes the pilot's
-temporary arrangement safe in the meantime.
+Nginx, `manager-credentials.sh`, and the Security checker must address the same
+files. The directory is not world-traversable, while the ACL grants only the
+mapped worker UID access. The default ACL is required: `manager-credentials.sh`
+creates a same-directory temporary file and atomically renames it over the
+active file; a per-file ACL alone would be lost on that rename. Direct binding
+means Nginx sees the replacement immediately, without a volume reseed or
+container restart.
 
 Generate it without the password ever reaching a command line or shell history:
 
@@ -84,14 +60,42 @@ Generate it without the password ever reaching a command line or shell history:
 python3 -c 'import crypt,getpass;print("pilot:"+crypt.crypt(getpass.getpass(),crypt.mksalt(crypt.METHOD_BLOWFISH,rounds=4096)))'
 ```
 
-Write the output into the file, then set the contract:
+Write the output into the file. On a host that has not used ACLs yet, install
+the `acl` package. Derive the host UID for container UID 101 from the rootless
+user namespace, then apply the checker-required ownership/modes and narrow
+access/default ACLs. This example assumes the production copy is at `/opt/crm`;
+it prints no password or hash:
 
 ```bash
-mkdir -p deploy/nginx/templates/auth
-chown root:101 deploy/nginx/templates/auth && chmod 0710 deploy/nginx/templates/auth
-chown root:101 deploy/nginx/templates/auth/compensation.htpasswd
-chmod 0640 deploy/nginx/templates/auth/compensation.htpasswd
+if ! command -v setfacl >/dev/null || ! command -v getfacl >/dev/null; then sudo apt-get install -y acl; fi
+AUTH_DIR=/opt/crm/deploy/nginx/templates/auth
+WORKER_UID=$(docker run --rm --network none alpine:3.19 awk '$1 <= 101 && 101 < $1 + $3 { print $2 + 101 - $1; exit }' /proc/self/uid_map)
+test -n "$WORKER_UID"
+sudo chown root:101 "$AUTH_DIR" "$AUTH_DIR/yoko-crm-staff.htpasswd" "$AUTH_DIR/compensation.htpasswd"
+sudo chmod 0710 "$AUTH_DIR"
+sudo chmod 0640 "$AUTH_DIR/yoko-crm-staff.htpasswd" "$AUTH_DIR/compensation.htpasswd"
+sudo setfacl -m "u:$WORKER_UID:--x" "$AUTH_DIR"
+sudo setfacl -m "u:$WORKER_UID:r--" "$AUTH_DIR/yoko-crm-staff.htpasswd" "$AUTH_DIR/compensation.htpasswd"
+sudo setfacl -m "d:u:$WORKER_UID:r--" "$AUTH_DIR"
+stat -c '%a %u:%g %n' "$AUTH_DIR" "$AUTH_DIR/yoko-crm-staff.htpasswd" "$AUTH_DIR/compensation.htpasswd"
+getfacl -cp "$AUTH_DIR" "$AUTH_DIR/yoko-crm-staff.htpasswd" "$AUTH_DIR/compensation.htpasswd"
 ```
+
+The ACL grants only the mapped worker traversal/read. The default entry makes
+future same-directory temporary files readable after the credential writer
+applies mode `0640`. The `stat` output must remain `710 0:101` for the
+directory and `640 0:101` for both files. Verify the Nginx worker and Security
+gate before accepting the change:
+
+```bash
+env -i PATH=/usr/bin:/bin /usr/bin/python3 -I /opt/codex-work/.release-prep/security-p0-shared/v1/p0-invariant.py disk --strict-consistency
+env -i PATH=/usr/bin:/bin /usr/bin/python3 -I /opt/codex-work/.release-prep/security-p0-shared/v1/p0-invariant.py live
+```
+
+After each issue/revoke operation, verify the ACL survived on the replaced
+file, the checker still returns HOLDS, anonymous access is `401`, and a
+permitted synthetic or owner-approved credential returns `200`. Do not print
+or pass the password as an argument.
 
 If Python's `crypt` module is unavailable (removed in 3.13),
 `openssl passwd -6 -stdin` produces a SHA-512 crypt hash that nginx also

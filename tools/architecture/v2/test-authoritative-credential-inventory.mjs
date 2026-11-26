@@ -10,6 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  assertReviewedAdvisoryUnlock,
   credentialReviewScope,
   isGovernedImmutableCredentialEvidence,
   verifyCredentialInventorySourceIntegrity,
@@ -17,6 +18,14 @@ import {
   verifyCredentialEvidenceDependencyBindings,
   verifyRuntimeBoundaryReviews,
 } from './verify-authoritative-credential-inventory.mjs'
+
+const advisorySite = { file: 'tg-bot/src/services/botSingletonLock.js', scope: 'Function:createBotSingletonLock/Function:release', method: 'sql-driver:query', line: 1 }
+const advisoryTarget = { kind: 'postgres_session_advisory_lock', credential_entities_in_scope: false }
+const advisorySource = () => "await active.query('SELECT pg_advisory_unlock($1, $2)', [LOCK_NAMESPACE, LOCK_ID]);"
+assertReviewedAdvisoryUnlock(advisorySite, advisoryTarget, advisorySource)
+assert.throws(() => assertReviewedAdvisoryUnlock({ ...advisorySite, file: 'other.js' }, advisoryTarget, advisorySource))
+assert.throws(() => assertReviewedAdvisoryUnlock(advisorySite, advisoryTarget, () => "await active.query('SELECT * FROM credentials');"))
+assert.throws(() => assertReviewedAdvisoryUnlock(advisorySite, { ...advisoryTarget, credential_entities_in_scope: true }, advisorySource))
 import { materializeCredentialReviewScopes } from './materialize-credential-review-scopes.mjs'
 
 const sourceSha = (label) => createHash('sha256').update(label).digest('hex')

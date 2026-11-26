@@ -16,20 +16,20 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 68,
+    "RAW_BASELINE_AMBIGUOUS": 69,
     "CONFIRMED_WRITE_OWNER_RESOLVED": 24,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
     "QUERY_RAW_SIDE_EFFECT_UNRESOLVED": 0,
     "SOURCE_FAMILY_REVIEW_REQUIRED": 0,
-    "CONFIRMED_NON_WRITE": 44,
+    "CONFIRMED_NON_WRITE": 45,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
-    "RESOLVED_NON_WRITE": 44,
+    "RESOLVED_NON_WRITE": 45,
     "OWNER_VALID_WRITE": 20,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 68,
+    "RECONCILIATION_TOTAL": 69,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -3590,13 +3590,70 @@
       "ownership_classification": null,
       "final_ownership_classification": null,
       "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "ambiguity_reasons": [
+        "select_function_side_effect_unresolved"
+      ],
+      "ambiguous": true,
+      "called_functions": [
+        "pg_advisory_unlock"
+      ],
+      "candidate_models": [],
+      "classification": "AMBIGUOUS",
+      "column": 19,
+      "confidence": "CONSERVATIVE",
+      "dynamic": false,
+      "end": 1881,
+      "file": "tg-bot/src/services/botSingletonLock.js",
+      "index": 1805,
+      "kind": "raw",
+      "line": 55,
+      "method": "sql-driver:query",
+      "model": null,
+      "operations": [],
+      "owner_contexts": [],
+      "read_projection_dynamic": true,
+      "read_tables": [],
+      "receiver_origin": "sql-driver:identifier:active",
+      "scope": "Function:createBotSingletonLock/Function:release",
+      "select_all": false,
+      "selected_column_sources": [],
+      "selected_columns": [],
+      "site_signature": "41e67f85acbb39608617966677295157f6e19ba3950978eee1bbf74a1a424c30",
+      "source_context": "telegram_channel",
+      "source_identity": "module_rules",
+      "source_sha256": "75efdea387ddf16053c4ad2f2d5f8d8547f13f2cbc14180c17dfa2d8fb120153",
+      "source_technical_module": "telegram_bot",
+      "sql_provenance_sha256": "9a6829aa9b5a61314740612c08fd8906947dab654fcac180b1b9201af661c4fc",
+      "sql_sha256": "324dfb81b9eb90145ec957cad0e3797f62d233e5bf7ba4e1f70a1d45d6b486f0",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "tables": [],
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "written_columns": [],
+      "record_id": "41e67f85acbb39608617966677295157f6e19ba3950978eee1bbf74a1a424c30",
+      "disposition": "CONFIRMED_NON_WRITE",
+      "semantic_state": "RESOLVED_NON_WRITE",
+      "rationale": "Exact SQL releases this session advisory lock; it has a lock-management side effect but performs no table data write.",
+      "ownership_classification": null,
+      "final_ownership_classification": null
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 68,
+    "ambiguous_denominator": 69,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "03e5bbcc1eacf3e7d81dfb723991d98055f0aa2d19e543083ed1a71539bd9ce1",
-    "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
+    "sorted_site_signatures_sha256": "55ca29bb35da739b16efbcfbbbb1ed09265f30ab5ca5ffeb0c329d317c08b1e1",
+    "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization.",
+    "p0_review": "Primary executor reviewed the exact session advisory unlock and its lock-management side effect."
   },
   "pr81_conflict_repair_write_ambiguity_review": {
     "status": "PASS_WITH_FINDINGS",
@@ -5487,6 +5544,31 @@
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation; the statement reads Driver profile columns and the Park name only.",
         "source_sha256:ccc1c476c694e1087d23bb67edefb07dd5ed4b7565d559cbec990fc27f4a828a",
         "sql_provenance_sha256:0b2c8715004aef2ba32b8b0ef2e307cc235c4045909cb85a8b2962c40ef4555d"
+      ]
+    },
+    {
+      "site_signature": "41e67f85acbb39608617966677295157f6e19ba3950978eee1bbf74a1a424c30",
+      "classification": "EXACT_SESSION_ADVISORY_UNLOCK_NO_DATA_WRITE",
+      "source": {
+        "file": "tg-bot/src/services/botSingletonLock.js",
+        "line": 55,
+        "column": 19,
+        "method": "sql-driver:query",
+        "source_sha256": "75efdea387ddf16053c4ad2f2d5f8d8547f13f2cbc14180c17dfa2d8fb120153",
+        "sql_provenance_sha256": "9a6829aa9b5a61314740612c08fd8906947dab654fcac180b1b9201af661c4fc"
+      },
+      "resolved_target": {
+        "kind": "SESSION_ADVISORY_LOCK_RELEASE",
+        "sql_sha256": "324dfb81b9eb90145ec957cad0e3797f62d233e5bf7ba4e1f70a1d45d6b486f0",
+        "functions": [
+          "pg_advisory_unlock"
+        ]
+      },
+      "evidence": [
+        "tg-bot/src/services/botSingletonLock.js:55:19",
+        "source_sha256:75efdea387ddf16053c4ad2f2d5f8d8547f13f2cbc14180c17dfa2d8fb120153",
+        "sql_provenance_sha256:9a6829aa9b5a61314740612c08fd8906947dab654fcac180b1b9201af661c4fc",
+        "Reviewed exact SQL releases a PostgreSQL session advisory lock and does not write table data."
       ]
     }
   ]
