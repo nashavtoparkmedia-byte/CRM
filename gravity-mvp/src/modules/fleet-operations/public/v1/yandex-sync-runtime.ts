@@ -16,6 +16,7 @@ export async function runScheduledYandexSyncV1(): Promise<ScheduledYandexSyncRes
   // Scheduled callers never request detached execution. Keep the public
   // scheduled contract narrow even though the shared coordinator also serves
   // the manual background-start path.
-  if (result.reason === 'started') return { ...result, reason: 'already_running', ok: false }
-  return result
+  const { reason, ...resultWithoutReason } = result
+  if (reason === 'started') return { ...resultWithoutReason, reason: 'already_running', ok: false }
+  return reason === undefined ? resultWithoutReason : { ...resultWithoutReason, reason }
 }
