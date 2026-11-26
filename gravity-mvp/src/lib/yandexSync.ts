@@ -251,6 +251,36 @@ export async function runYandexSync(
         const reconciliation = reconciliationPhase.value
         driversUpdated += reconciliation.profilesUpserted
 
+        // A park read can be partial when Fleet throttles a later page.  Do
+        // not continue into the expensive trips phase or publish a false
+        // successful SyncStatus: the caller must see the provider failure and
+        // retry the profile read after the rate limit clears.  Any profiles
+        // already admitted by the reconciler remain governed by its normal
+        // persistence/identity rules.
+        if (reconciliation.partial || reconciliation.failedParks > 0) {
+            const detail = reconciliation.errors
+                .map(error => error.message)
+                .filter(Boolean)
+                .join('; ')
+            const errorMessage = detail
+                ? `Yandex Fleet profile reconciliation partial: ${detail}`
+                : 'Yandex Fleet profile reconciliation partial'
+            if (!await finishStatus(lease.leaseMarker, 'error', {
+                errorMessage,
+                driversUpdated,
+                ordersProcessed: 0,
+            })) {
+                return { ok: false, reason: 'lease_lost' }
+            }
+            return {
+                ok: false,
+                reason: 'error',
+                errorMessage,
+                driversUpdated,
+                ordersProcessed: 0,
+            }
+        }
+
         // 2. Trips for the analysis period
         const tripsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
             YandexFleetService.syncTrips(thresholds.analysis_period)
