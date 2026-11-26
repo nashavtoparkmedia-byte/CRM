@@ -4950,6 +4950,57 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "fleet-sync-manual-trigger-test-8506d442-20261126",
+      "reviewed_at": "2026-11-26T00:00:00Z",
+      "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+      "role": "PRIMARY_EXECUTOR_REVIEW",
+      "authorization": "OWNER_P0_FLEET_SYNC_PRODUCTION_DIAGNOSTIC_AND_REPAIR",
+      "predecessor_review": {
+        "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+        "role": "PRIMARY_EXECUTOR_REVIEW",
+        "immutable": true,
+        "note": "Extends the exact reviewed ownership chain without changing any existing assignment, lifecycle, or exclusion."
+      },
+      "reason": "The Fleet sync candidate adds one executable TEST surface under the already-owned fleet_operations context. The path is intentionally unassigned in the reviewed exact-path registry under the established application TEST cohort precedent; it introduces no production capability, credential access, ownership change, or new exclusion. This amendment records only the bounded denominator movement verified by the authoritative preview for clean candidate 8506d442be1bc623c6480530e6aa65f3d2c12231.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2903,
+        "tracked_inventory_sha256": "c9b7cffbaadb8bb1329c29497bbd90c5ac223829bb4c3ccacaa1d9b789058ab9",
+        "coverage_sha256": "dbec1a507ea72733d04c2c3bb39c1d768e2329cda7ab5c0ecca79fea24b207e4"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2904,
+        "tracked_inventory_sha256": "e4588ef4a6a8c0bcf731b73fb32f9a9e2c2770cc28d5490d6de998bfd028538b",
+        "coverage_sha256": "d9dc27fede41896b33f1caf5512bcbabc2069273983fcb550c011fb988ca7d68"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/lib/yandexSync.ts",
+          "previous_source_sha256": "37d8459dcea04404eb0a4faa749334fffedc4f93bd2486ea1e978ce02bb68706",
+          "current_source_sha256": "ad42f412d66134be8ca058e2974406c3e48b88ad9bb20cbb74abd3af455128aa",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The Fleet sync change only adds a bounded background execution option and preserves the existing single lease, provider capability, persistence, and error-handling path. It does not change ownership, lifecycle, credential authority, or public data contracts; this amendment records the exact source-byte rebind for the already reviewed executable surface."
+        }
+      ],
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "This is a TEST-lifecycle surface under the existing fleet_operations context. It verifies the provider connection capability and does not ship to the production runtime, access credentials, mutate data, or define a new public contract. The established application TEST cohort is intentionally unassigned in the reviewed exact-path registry; this amendment changes no ownership semantics."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
