@@ -1,6 +1,8 @@
 import { createContext, useState, useEffect, useContext } from 'react';
 import { useRouter } from 'next/router';
 
+const APP_BASE_PATH = '/bot-admin';
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -10,7 +12,7 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         let active = true;
-        fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' })
+        fetch(`${APP_BASE_PATH}/api/auth/session`, { credentials: 'same-origin', cache: 'no-store' })
             .then(response => {
                 if (active) setAuthenticated(response.ok);
             })
@@ -24,7 +26,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = async (username, password) => {
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(`${APP_BASE_PATH}/api/auth/login`, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
@@ -40,7 +42,7 @@ export const AuthProvider = ({ children }) => {
 
     const logout = async () => {
         try {
-            await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            await fetch(`${APP_BASE_PATH}/api/auth/logout`, { method: 'POST', credentials: 'same-origin' });
         } finally {
             setAuthenticated(false);
             await router.push('/login');

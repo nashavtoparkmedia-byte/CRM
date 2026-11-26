@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Relative URL — the authenticated same-origin API route proxies to the
 // server-only TG_BOT_API_URL and adds upstream Basic auth there.
-const API_BASE = '/api/admin';
+const API_BASE = '/bot-admin/api/admin';
 
 // Create an axios instance
 const api = axios.create({

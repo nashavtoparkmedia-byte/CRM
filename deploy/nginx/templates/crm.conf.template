@@ -135,6 +135,51 @@ server {
         proxy_send_timeout 300s;
     }
 
+    # Same-origin Telegram admin. BOT_ADMIN_DOMAIN remains disabled; the
+    # frontend is isolated under a base path so its assets/API cannot collide
+    # with CRM routes. Its own HttpOnly staff session is still required.
+    location = /bot-admin {
+        set $bot_admin_backend "http://tg-bot-frontend:3004";
+        # Next's basePath is an external URL prefix; strip it before the
+        # upstream receives the request (/, /api, or /_next).
+        rewrite ^/bot-admin$ / break;
+        proxy_pass $bot_admin_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+        add_header Content-Security-Policy "frame-ancestors 'self'" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    }
+
+    location ^~ /bot-admin/ {
+        set $bot_admin_backend "http://tg-bot-frontend:3004";
+        rewrite ^/bot-admin/(.*)$ /$1 break;
+        proxy_pass $bot_admin_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Authorization "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 60s;
+        proxy_send_timeout 60s;
+        add_header Content-Security-Policy "frame-ancestors 'self'" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    }
+
     # SIP WebSocket is intentionally unavailable on the P0 public CRM edge.
     location /wss-sip {
         return 404;
