@@ -252,6 +252,29 @@ describe('durable multi-park reconciliation context', () => {
       data: expect.objectContaining({ hiredAt: new Date('2026-10-19T05:00:00.000Z') }),
     }))
   })
+
+  test('reuses stored Fleet created_date evidence when a refresh omits it', async () => {
+    mocks.driverFindUnique.mockResolvedValueOnce({
+      id: 'driver-existing',
+      contactId: null,
+      yandexDriverId: 'profile-a',
+      licenseNumber: null,
+      customFields: {
+        fleetSource: {
+          sourceDates: { createdDate: '2026-10-19T05:00:00.000Z' },
+          sourceFreshness: 'fresh',
+          sourceState: 'current',
+        },
+      },
+    })
+    mocks.driverUpdate.mockResolvedValueOnce({ id: 'driver-existing' })
+
+    await expect(upsertObservation(observation(), 1)).resolves.toMatchObject({ driverId: 'driver-existing' })
+
+    expect(mocks.driverUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ hiredAt: new Date('2026-10-19T05:00:00.000Z') }),
+    }))
+  })
 })
 
 describe('targeted refresh of one driver profile', () => {

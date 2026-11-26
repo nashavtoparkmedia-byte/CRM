@@ -379,9 +379,16 @@ export async function upsertObservation(
     // A fact Fleet did not state keeps the last observed value instead of
     // clearing it; eligibility fails closed while it has never been stated.
     const eligibility = compensationEligibilityFactsFromFleetProfileV1(observation.rawMetadata.driverProfile)
-    const createdAt = observation.sourceDates.createdDate
-      ? new Date(observation.sourceDates.createdDate)
-      : null
+    // Older production rows already carry the provider created_date in the
+    // durable Fleet evidence. Reuse that value when a later provider response
+    // omits the optional field, so a successful partial refresh can repair the
+    // drivers-view projection without inventing a date.
+    const createdAt = [
+      observation.sourceDates.createdDate,
+      previousFleetEvidence.sourceDates.createdDate,
+    ]
+      .map(value => value ? new Date(value) : null)
+      .find((value): value is Date => value !== null && Number.isFinite(value.getTime())) ?? null
     const data = {
       ...(eligibility.isSelfEmployed !== null ? { isSelfEmployed: eligibility.isSelfEmployed } : {}),
       ...(eligibility.employmentType !== null ? { employmentType: eligibility.employmentType } : {}),
