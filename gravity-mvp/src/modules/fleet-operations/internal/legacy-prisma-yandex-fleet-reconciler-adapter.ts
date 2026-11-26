@@ -379,10 +379,14 @@ export async function upsertObservation(
     // A fact Fleet did not state keeps the last observed value instead of
     // clearing it; eligibility fails closed while it has never been stated.
     const eligibility = compensationEligibilityFactsFromFleetProfileV1(observation.rawMetadata.driverProfile)
+    const createdAt = observation.sourceDates.createdDate
+      ? new Date(observation.sourceDates.createdDate)
+      : null
     const data = {
       ...(eligibility.isSelfEmployed !== null ? { isSelfEmployed: eligibility.isSelfEmployed } : {}),
       ...(eligibility.employmentType !== null ? { employmentType: eligibility.employmentType } : {}),
       ...(eligibility.parkHireDate !== null ? { yandexHireDate: eligibility.parkHireDate } : {}),
+      ...(createdAt && Number.isFinite(createdAt.getTime()) ? { hiredAt: createdAt } : {}),
       externalParkId: observation.externalParkId,
       externalDriverProfileId: observation.externalDriverProfileId,
       parkId,

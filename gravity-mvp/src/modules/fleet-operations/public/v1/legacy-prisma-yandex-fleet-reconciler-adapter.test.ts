@@ -238,6 +238,20 @@ describe('durable multi-park reconciliation context', () => {
     expect(mocks.driverCreate).not.toHaveBeenCalled()
     expect(mocks.reconcile).not.toHaveBeenCalled()
   })
+
+  test('preserves provider created_date as Driver.hiredAt for the drivers view', async () => {
+    mocks.driverFindUnique.mockResolvedValueOnce(null)
+    mocks.driverFindFirst.mockResolvedValueOnce(null)
+    mocks.driverCreate.mockResolvedValueOnce({ id: 'driver-created' })
+
+    await expect(upsertObservation(observation({
+      sourceDates: { createdDate: '2026-10-19T05:00:00.000Z' },
+    }), 1)).resolves.toMatchObject({ driverId: 'driver-created' })
+
+    expect(mocks.driverCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ hiredAt: new Date('2026-10-19T05:00:00.000Z') }),
+    }))
+  })
 })
 
 describe('targeted refresh of one driver profile', () => {
