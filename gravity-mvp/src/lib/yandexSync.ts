@@ -185,12 +185,18 @@ async function acquireLease(bypassCooldown: boolean): Promise<{
 export interface RunYandexSyncOptions {
     /** Skip cooldown check (used by automatic cron). */
     bypassCooldown?: boolean
+    /**
+     * Detach the long-running work from a manual server action. The fenced
+     * lease and SyncStatus row remain the source of truth; callers poll that
+     * row instead of holding an HTTP request open for the provider budget.
+     */
+    background?: boolean
 }
 
 export interface RunYandexSyncResult {
     ok: boolean
-    /** Reason for refusal when ok = false. */
-    reason?: 'already_running' | 'cooldown' | 'error' | 'lease_lost'
+    /** Refusal reason, or 'started' for detached manual execution. */
+    reason?: 'already_running' | 'cooldown' | 'started' | 'error' | 'lease_lost'
     cooldownRemainingMs?: number
     errorMessage?: string
     driversUpdated?: number
@@ -226,89 +232,102 @@ export async function runYandexSync(
         return { ok: false, reason: 'already_running' }
     }
 
-    let driversUpdated = 0
-    let ordersProcessed = 0
+    const execute = async (): Promise<RunYandexSyncResult> => {
+        let driversUpdated = 0
+        let ordersProcessed = 0
 
-    try {
-        // Snapshot the Platform-composed runner once for the full fenced run.
-        // Missing bootstrap composition fails closed instead of silently
-        // completing a Fleet sync without handing exact Contact pairs to the
-        // Contacts automatic-merge policy.
-        const reconcileYandexFleet = requireYandexFleetReconciliationRunnerV1()
-        const thresholdsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, getThresholds)
-        if (!thresholdsPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
-        const thresholds = thresholdsPhase.value
+        try {
+            // Snapshot the Platform-composed runner once for the full fenced run.
+            // Missing bootstrap composition fails closed instead of silently
+            // completing a Fleet sync without handing exact Contact pairs to the
+            // Contacts automatic-merge policy.
+            const reconcileYandexFleet = requireYandexFleetReconciliationRunnerV1()
+            const thresholdsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, getThresholds)
+            if (!thresholdsPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+            const thresholds = thresholdsPhase.value
 
-        // 1. One shared, park-qualified reconciler owns profile ingestion for
-        // nightly, manual, Contact refresh and confirmation follow-up modes.
-        const reconciliationPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
-            reconcileYandexFleet({
-                contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
-                mode: 'nightly',
-            })
-        ))
-        if (!reconciliationPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
-        const reconciliation = reconciliationPhase.value
-        driversUpdated += reconciliation.profilesUpserted
+            // 1. One shared, park-qualified reconciler owns profile ingestion for
+            // nightly, manual, Contact refresh and confirmation follow-up modes.
+            const reconciliationPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
+                reconcileYandexFleet({
+                    contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
+                    mode: 'nightly',
+                })
+            ))
+            if (!reconciliationPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+            const reconciliation = reconciliationPhase.value
+            driversUpdated += reconciliation.profilesUpserted
 
-        // A park read can be partial when Fleet throttles a later page.  Do
-        // not continue into the expensive trips phase or publish a false
-        // successful SyncStatus: the caller must see the provider failure and
-        // retry the profile read after the rate limit clears.  Any profiles
-        // already admitted by the reconciler remain governed by its normal
-        // persistence/identity rules.
-        if (reconciliation.partial || reconciliation.failedParks > 0) {
-            const detail = reconciliation.errors
-                .map(error => error.message)
-                .filter(Boolean)
-                .join('; ')
-            const errorMessage = detail
-                ? `Yandex Fleet profile reconciliation partial: ${detail}`
-                : 'Yandex Fleet profile reconciliation partial'
-            if (!await finishStatus(lease.leaseMarker, 'error', {
-                errorMessage,
-                driversUpdated,
-                ordersProcessed: 0,
-            })) {
+            // A park read can be partial when Fleet throttles a later page.  Do
+            // not continue into the expensive trips phase or publish a false
+            // successful SyncStatus: the caller must see the provider failure and
+            // retry the profile read after the rate limit clears.  Any profiles
+            // already admitted by the reconciler remain governed by its normal
+            // persistence/identity rules.
+            if (reconciliation.partial || reconciliation.failedParks > 0) {
+                const detail = reconciliation.errors
+                    .map(error => error.message)
+                    .filter(Boolean)
+                    .join('; ')
+                const errorMessage = detail
+                    ? `Yandex Fleet profile reconciliation partial: ${detail}`
+                    : 'Yandex Fleet profile reconciliation partial'
+                if (!await finishStatus(lease.leaseMarker, 'error', {
+                    errorMessage,
+                    driversUpdated,
+                    ordersProcessed: 0,
+                })) {
+                    return { ok: false, reason: 'lease_lost' }
+                }
+                return {
+                    ok: false,
+                    reason: 'error',
+                    errorMessage,
+                    driversUpdated,
+                    ordersProcessed: 0,
+                }
+            }
+
+            // 2. Trips for the analysis period
+            const tripsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
+                YandexFleetService.syncTrips(thresholds.analysis_period)
+            ))
+            if (!tripsPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+            const trips = tripsPhase.value
+            ordersProcessed = trips.ordersProcessed
+
+            // 3. Recalculate segments
+            const recalcPhase = await runWithLeaseHeartbeat(lease.leaseMarker, recalculateAllSegments)
+            if (!recalcPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+            const recalc = recalcPhase.value
+
+            if (!await finishStatus(lease.leaseMarker, 'success', { driversUpdated, ordersProcessed })) {
                 return { ok: false, reason: 'lease_lost' }
             }
+
             return {
-                ok: false,
-                reason: 'error',
-                errorMessage,
+                ok: true,
                 driversUpdated,
-                ordersProcessed: 0,
+                ordersProcessed,
+                recalculatedCount: recalc.count,
             }
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : String(err)
+            if (!await finishStatus(lease.leaseMarker, 'error', { errorMessage, driversUpdated, ordersProcessed })) {
+                return { ok: false, reason: 'lease_lost', errorMessage }
+            }
+            return { ok: false, reason: 'error', errorMessage }
         }
-
-        // 2. Trips for the analysis period
-        const tripsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
-            YandexFleetService.syncTrips(thresholds.analysis_period)
-        ))
-        if (!tripsPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
-        const trips = tripsPhase.value
-        ordersProcessed = trips.ordersProcessed
-
-        // 3. Recalculate segments
-        const recalcPhase = await runWithLeaseHeartbeat(lease.leaseMarker, recalculateAllSegments)
-        if (!recalcPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
-        const recalc = recalcPhase.value
-
-        if (!await finishStatus(lease.leaseMarker, 'success', { driversUpdated, ordersProcessed })) {
-            return { ok: false, reason: 'lease_lost' }
-        }
-
-        return {
-            ok: true,
-            driversUpdated,
-            ordersProcessed,
-            recalculatedCount: recalc.count,
-        }
-    } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : String(err)
-        if (!await finishStatus(lease.leaseMarker, 'error', { errorMessage, driversUpdated, ordersProcessed })) {
-            return { ok: false, reason: 'lease_lost', errorMessage }
-        }
-        return { ok: false, reason: 'error', errorMessage }
     }
+
+    if (options.background) {
+        void execute().catch(error => {
+            // execute() records normal failures in SyncStatus. This guard is
+            // only for an unexpected programming/runtime rejection so a
+            // detached promise never becomes an unhandled rejection.
+            console.error('[runYandexSync] detached execution rejected', error)
+        })
+        return { ok: true, reason: 'started' }
+    }
+    return execute()
 }

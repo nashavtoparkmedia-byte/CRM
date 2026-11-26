@@ -144,6 +144,21 @@ describe('Yandex sync fenced lease', () => {
     }))
   })
 
+  test('background start returns before the provider work completes', async () => {
+    mocks.acquire.mockResolvedValueOnce(1)
+
+    await expect(runYandexSync({ bypassCooldown: true, background: true })).resolves.toEqual({
+      ok: true,
+      reason: 'started',
+    })
+
+    await vi.waitFor(() => expect(mocks.recalculate).toHaveBeenCalledTimes(1))
+    expect(mocks.syncTrips).toHaveBeenCalledTimes(1)
+    expect(mocks.updateStatus).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'success' }),
+    }))
+  })
+
   test('a healthy long-running phase renews below expiry and cannot be superseded', async () => {
     vi.useFakeTimers()
     try {
