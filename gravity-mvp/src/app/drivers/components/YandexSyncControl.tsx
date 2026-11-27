@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react"
 import { getYandexSyncStatus, triggerYandexSync } from "../segmentation-actions"
 
@@ -23,6 +24,7 @@ interface Toast {
  * button. Kept self-contained so DriversClient stays readable.
  */
 export function YandexSyncControl() {
+    const router = useRouter()
     const [status, setStatus] = useState<SyncStatusView | null>(null)
     const [isClicking, setIsClicking] = useState(false)
     const [toast, setToast] = useState<Toast | null>(null)
@@ -70,9 +72,10 @@ export function YandexSyncControl() {
                     clearInterval(pollingRef.current)
                     pollingRef.current = null
                 }
+                router.refresh()
             }
         }, 3000)
-    }, [status?.status, fetchStatus])
+    }, [status?.status, fetchStatus, router])
 
     const handleClick = async () => {
         if (isClicking) return
@@ -80,7 +83,12 @@ export function YandexSyncControl() {
         setIsClicking(true)
         try {
             const result = await triggerYandexSync()
-            if (result.ok) {
+            if (result.reason === 'started') {
+                setToast({
+                    message: 'Синхронизация запущена. Статус обновится автоматически.',
+                    type: 'info'
+                })
+            } else if (result.ok) {
                 setToast({
                     message: `Обновлено: ${result.driversUpdated ?? 0} водителей, ${result.ordersProcessed ?? 0} поездок`,
                     type: 'success'

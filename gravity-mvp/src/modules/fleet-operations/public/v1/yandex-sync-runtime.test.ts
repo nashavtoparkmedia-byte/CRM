@@ -13,4 +13,12 @@ describe('scheduled Yandex sync capability', () => {
     await expect(runScheduledYandexSyncV1()).resolves.toEqual({ ok: true, driversUpdated: 3 })
     expect(runYandexSync).toHaveBeenCalledWith({ bypassCooldown: true })
   })
+
+  it('does not leak manual background-start semantics into the scheduled contract', async () => {
+    runYandexSync.mockResolvedValue({ ok: true, reason: 'started' })
+    await expect(runScheduledYandexSyncV1()).resolves.toEqual({
+      ok: false,
+      reason: 'already_running',
+    })
+  })
 })

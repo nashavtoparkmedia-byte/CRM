@@ -11,6 +11,12 @@ export type ScheduledYandexSyncResultV1 = {
 }
 
 /** Fixed scheduled operation: callers cannot alter cooldown or sync scope. */
-export function runScheduledYandexSyncV1(): Promise<ScheduledYandexSyncResultV1> {
-  return runYandexSync({ bypassCooldown: true })
+export async function runScheduledYandexSyncV1(): Promise<ScheduledYandexSyncResultV1> {
+  const result = await runYandexSync({ bypassCooldown: true })
+  // Scheduled callers never request detached execution. Keep the public
+  // scheduled contract narrow even though the shared coordinator also serves
+  // the manual background-start path.
+  const { reason, ...resultWithoutReason } = result
+  if (reason === 'started') return { ...resultWithoutReason, reason: 'already_running', ok: false }
+  return reason === undefined ? resultWithoutReason : { ...resultWithoutReason, reason }
 }

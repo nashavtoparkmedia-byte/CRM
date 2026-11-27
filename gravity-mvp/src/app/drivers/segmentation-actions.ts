@@ -85,7 +85,7 @@ export async function getYandexSyncStatus(): Promise<SyncStatusView> {
 
 export interface ManualSyncResult {
     ok: boolean
-    reason?: 'already_running' | 'cooldown' | 'error' | 'lease_lost'
+    reason?: 'already_running' | 'cooldown' | 'started' | 'error' | 'lease_lost'
     cooldownRemainingMs?: number
     errorMessage?: string
     driversUpdated?: number
@@ -103,9 +103,9 @@ export interface ManualSyncResult {
  * red toast with the actual cause (auth issue, network timeout, etc).
  */
 export async function triggerYandexSync(): Promise<ManualSyncResult> {
-    const result = await runYandexSync()
-    if (result.ok) {
-        revalidatePath('/drivers')
-    }
-    return result
+    // Fleet profile pagination and trip reconciliation can legitimately use
+    // the full provider wait budget. Do not hold the manual HTTP/server-action
+    // request open; SyncStatus is already the durable progress contract and
+    // the client polls it while the fenced runner continues.
+    return await runYandexSync({ background: true })
 }

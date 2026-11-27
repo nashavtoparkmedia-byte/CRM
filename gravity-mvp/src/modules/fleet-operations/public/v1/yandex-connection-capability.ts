@@ -14,6 +14,24 @@ export type YandexConnectionCredentialsV1 = {
     name?: string | null
 }
 
+/**
+ * The legacy ApiConnection fallback predates ParkConnection and can contain
+ * the same provider credentials under multiple display names.  Repeating an
+ * identical provider request only consumes Fleet quota; credentials that
+ * differ are deliberately retained for explicit reconciliation/diagnostics.
+ */
+export function dedupeYandexConnectionCredentialsV1(
+    connections: readonly YandexConnectionCredentialsV1[],
+): YandexConnectionCredentialsV1[] {
+    const seen = new Set<string>()
+    return connections.filter((connection) => {
+        const identity = `${connection.parkId}\0${connection.clid}\0${connection.apiKey}`
+        if (seen.has(identity)) return false
+        seen.add(identity)
+        return true
+    })
+}
+
 const yandexCredentialsSelect = {
     id: true,
     clid: true,
@@ -50,22 +68,22 @@ export async function listYandexConnectionCredentialsV1(): Promise<YandexConnect
         },
     })
     if (configured.length > 0) {
-        return configured.map(row => ({
+        return dedupeYandexConnectionCredentialsV1(configured.map(row => ({
             ...row.apiConnection,
             connectionId: row.apiConnection.id,
             localParkId: row.parkId,
             parkId: row.externalParkId,
-        }))
+        })))
     }
     const legacy = await prisma.apiConnection.findMany({
         orderBy: { createdAt: 'asc' },
         select: yandexCredentialsSelect,
     })
-    return legacy.map(connection => ({
+    return dedupeYandexConnectionCredentialsV1(legacy.map(connection => ({
         ...connection,
         connectionId: connection.id,
         localParkId: null,
-    }))
+    })))
 }
 
 export async function listYandexConnectionMetadataV1(): Promise<Array<{ parkId: string; name: string | null }>> {

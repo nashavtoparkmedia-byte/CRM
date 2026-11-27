@@ -29,6 +29,10 @@ Partial update 2026-11-26: the driver-facing Telegram admin is embedded at the C
 `/bot-admin` base path keeps assets and API routes isolated. The panel retains its own HttpOnly staff session and
 never receives CRM Basic credentials or URL-fragment tokens. This runtime boundary is owned by `telegram_channel`
 plus `deploy/` edge routing; no new domain or service boundary was introduced.
+Partial update 2026-11-26: F-26 manual Fleet sync starts the existing fenced runner in the background, with
+`SyncStatus` polling and a client refresh on terminal status; the request no longer holds the provider wait budget.
+The reconciler also reuses stored Fleet `created_date` evidence for legacy Driver rows when a later response omits
+that optional field. Verified against candidate `b2977cfac7fb1d9ef792244ced553c7194350886`.
 
 # YOKO CRM — Engineering Map
 
@@ -1202,7 +1206,11 @@ repository.
 reconciler adapter: fetch park profiles → `upsertObservation` (`Driver`) → cluster
 reconcile with contacts → optional automatic merge →
 `YandexFleetService.syncTrips` → `DriverDaySummary` → segment recalculation.
-Also reachable via `GET /api/cron/sync-trips` and the drivers UI.
+Also reachable via `GET /api/cron/sync-trips` and the drivers UI. The scheduled path
+remains synchronous; the manual `YandexSyncControl` path calls the same runner with
+background execution, polls `SyncStatus`, and refreshes `/drivers` after success or
+error. `upsertObservation` may derive `Driver.hiredAt` from the existing
+`fleetSource.sourceDates.createdDate` evidence when the provider omits `created_date`.
 
 **F-27 Scraper check**
 `POST G/app/api/monitoring/drivers/[id]/fleet-check/route.ts` (row lock on

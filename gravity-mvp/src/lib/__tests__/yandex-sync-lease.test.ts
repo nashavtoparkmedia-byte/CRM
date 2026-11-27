@@ -116,6 +116,49 @@ describe('Yandex sync fenced lease', () => {
     }))
   })
 
+  test('stops before trips and publishes an error when profile reconciliation is partial', async () => {
+    mocks.acquire.mockResolvedValueOnce(1)
+    mocks.reconcile.mockResolvedValueOnce({
+      profilesUpserted: 0,
+      partial: true,
+      failedParks: 1,
+      errors: [{ parkId: 'park-a', parkName: 'Yoko', message: 'Yandex Fleet HTTP 429' }],
+    })
+
+    await expect(runYandexSync({ bypassCooldown: true })).resolves.toMatchObject({
+      ok: false,
+      reason: 'error',
+      errorMessage: 'Yandex Fleet profile reconciliation partial: Yandex Fleet HTTP 429',
+      driversUpdated: 0,
+      ordersProcessed: 0,
+    })
+    expect(mocks.syncTrips).not.toHaveBeenCalled()
+    expect(mocks.recalculate).not.toHaveBeenCalled()
+    expect(mocks.updateStatus).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'error',
+        errorMessage: 'Yandex Fleet profile reconciliation partial: Yandex Fleet HTTP 429',
+        driversUpdated: 0,
+        ordersProcessed: 0,
+      }),
+    }))
+  })
+
+  test('background start returns before the provider work completes', async () => {
+    mocks.acquire.mockResolvedValueOnce(1)
+
+    await expect(runYandexSync({ bypassCooldown: true, background: true })).resolves.toEqual({
+      ok: true,
+      reason: 'started',
+    })
+
+    await vi.waitFor(() => expect(mocks.recalculate).toHaveBeenCalledTimes(1))
+    expect(mocks.syncTrips).toHaveBeenCalledTimes(1)
+    expect(mocks.updateStatus).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'success' }),
+    }))
+  })
+
   test('a healthy long-running phase renews below expiry and cannot be superseded', async () => {
     vi.useFakeTimers()
     try {
