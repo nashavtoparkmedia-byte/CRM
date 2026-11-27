@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const managerSession = vi.fn()
+const staffPrincipal = vi.fn()
+const staffAuthority = vi.fn()
 const ensureCompensationBudgetPeriodV1 = vi.fn()
 const revalidatePath = vi.fn()
 
 vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }))
-vi.mock('./manager-data', () => ({ managerSession: () => managerSession() }))
+vi.mock('@/modules/identity-access/public/v1', () => ({ getStaffSessionPrincipalV1: () => staffPrincipal() }))
+vi.mock('./referrals/referral-data', () => ({ resolveCashStaffAuthorityV1: () => staffAuthority() }))
 vi.mock('@/modules/fleet-operations/public/v1', () => ({
     ensureCompensationBudgetPeriodV1: (input: unknown) => ensureCompensationBudgetPeriodV1(input),
 }))
 
-import { provisionCompensationBudget } from './budget-actions'
+import { provisionCompensationBudget } from './manager-data'
 
 const form = (periodKey: string, limitRubles: string) => {
     const value = new FormData()
@@ -21,13 +23,14 @@ const form = (periodKey: string, limitRubles: string) => {
 
 beforeEach(() => {
     vi.clearAllMocks()
-    managerSession.mockResolvedValue({ ok: true, role: 'Менеджер', principal: { principalId: 'staff:1', operatorLabel: 'Менеджер' } })
+    staffPrincipal.mockResolvedValue({ role: 'Менеджер' })
+    staffAuthority.mockResolvedValue({ ok: true, authority: { principalId: 'staff:1', operatorLabel: 'Менеджер' } })
     ensureCompensationBudgetPeriodV1.mockResolvedValue({ ok: true, outcome: 'created' })
 })
 
 describe('budget management action', () => {
     it('requires the verified manager session before reaching the monetary core', async () => {
-        managerSession.mockResolvedValue({ ok: false, refusal: 'not_authenticated' })
+        staffAuthority.mockResolvedValue({ ok: false, refusal: 'staff_not_authenticated' })
         await provisionCompensationBudget(form('2026-11', '5000'))
         expect(ensureCompensationBudgetPeriodV1).not.toHaveBeenCalled()
         expect(revalidatePath).not.toHaveBeenCalled()

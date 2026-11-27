@@ -1,5 +1,5 @@
 import { rublesFromKopecks } from './money'
-import { provisionCompensationBudget } from './budget-actions'
+import { provisionCompensationBudget } from './manager-data'
 
 export interface CompensationBudgetPanelView {
     periodKey: string
