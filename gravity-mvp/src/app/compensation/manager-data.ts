@@ -1,19 +1,21 @@
 import 'server-only'
 
-import { CURRENT_USER_QUERY_V1 } from '@/contracts/identity-access/v1'
-import { queryCurrentUserV1 } from '@/modules/identity-access/public/v1/identity-actions'
+import { revalidatePath } from 'next/cache'
+
 import {
     compensationManagerApplicationV1,
     compensationManagerApplicationsV1,
     compensationManagerBudgetV1,
     compensationManagerEvidenceSourceV1,
     compensationManagerPeriodKeyV1,
-    resolveCompensationManagerPrincipalV1,
 } from '@/modules/fleet-operations/public/v1'
+import { getStaffSessionPrincipalV1 } from '@/modules/identity-access/public/v1'
 import { listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
 import { readTelegramBotFileV1 } from '@/modules/telegram-channel/public/v1'
 
 import { MANAGER_BOARD_ALL_STATES } from './money'
+import { resolveCashStaffAuthorityV1 } from './referrals/referral-data'
+import { ensureCompensationBudgetPeriodV1 } from '@/modules/fleet-operations/public/v1'
 
 /**
  * Everything the manager screens read, in one server-only module.
@@ -23,9 +25,10 @@ import { MANAGER_BOARD_ALL_STATES } from './money'
  * Telegram channel owns the bot account that holds the support screenshot. The
  * screens compose these; they never reach past them.
  *
- * Requiring a CRM session here narrows who reaches this data. It is not
- * authentication: the CRM identifies a user by an unsigned cookie, which is a
- * known systemic limitation recorded for the production rollout.
+ * Every read and write is gated by Identity Access's verified Staff Session.
+ * The legacy `crm_user_id` cookie is deliberately not an authority for Cash:
+ * it is an unsigned UI convenience and cannot identify the operator of a
+ * monetary decision.
  */
 
 /** The CRM roles that may look at compensation and act on it. */
@@ -42,15 +45,57 @@ export type ManagerSessionV1 =
     | { ok: false; refusal: ManagerSessionRefusalV1 }
 
 export async function managerSession(): Promise<ManagerSessionV1> {
-    const result = await queryCurrentUserV1({ contract: CURRENT_USER_QUERY_V1 })
-    const user = (result as { user: unknown }).user as { role?: string } | null
-    const acting = resolveCompensationManagerPrincipalV1(user as never)
-    if (!acting.resolved) return { ok: false, refusal: acting.refusal }
-    const role = typeof user?.role === 'string' ? user.role : ''
-    if (!(MANAGER_ROLES_V1 as readonly string[]).includes(role)) {
-        return { ok: false, refusal: 'role_not_allowed' }
+    let principal: Awaited<ReturnType<typeof getStaffSessionPrincipalV1>>
+    try {
+        principal = await getStaffSessionPrincipalV1()
+        const staff = await resolveCashStaffAuthorityV1()
+        if (!staff.ok) {
+            if (staff.refusal === 'staff_role_not_allowed') return { ok: false, refusal: 'role_not_allowed' }
+            if (staff.refusal === 'staff_identity_mismatch') return { ok: false, refusal: 'user_identity_incomplete' }
+            return { ok: false, refusal: 'not_authenticated' }
+        }
+        const role = principal?.role ?? ''
+        if (!(MANAGER_ROLES_V1 as readonly string[]).includes(role)) {
+            return { ok: false, refusal: 'role_not_allowed' }
+        }
+        return {
+            ok: true,
+            principal: {
+                principalId: staff.authority.principalId,
+                operatorLabel: staff.authority.operatorLabel,
+            },
+            role,
+        }
+    } catch {
+        return { ok: false, refusal: 'not_authenticated' }
     }
-    return { ok: true, principal: acting.principal, role }
+}
+
+/**
+ * The CRM's one budget-management entry point.
+ *
+ * The monetary core remains the sole source of truth: this action only proves
+ * the signed Staff Session and forwards the operator's month/limit to the
+ * existing owner operation. That operation is monotonic (create or raise;
+ * never lower or reopen), idempotent and concurrency-safe.
+ */
+export async function provisionCompensationBudget(formData: FormData): Promise<void> {
+    'use server'
+
+    const session = await managerSession()
+    if (!session.ok) return
+
+    const periodKey = String(formData.get('periodKey') ?? '')
+    const rawRubles = String(formData.get('limitRubles') ?? '').trim().replace(',', '.')
+    const match = /^(\d{1,9})(?:\.(\d{1,2}))?$/u.exec(rawRubles)
+    if (match === null) return
+
+    const fraction = (match[2] ?? '').padEnd(2, '0')
+    const limitKopecks = Number(match[1]) * 100 + Number(fraction || '0')
+    if (!Number.isSafeInteger(limitKopecks) || limitKopecks <= 0) return
+
+    await ensureCompensationBudgetPeriodV1({ periodKey, limitKopecks })
+    revalidatePath('/compensation')
 }
 
 export interface ManagerParkOptionV1 {

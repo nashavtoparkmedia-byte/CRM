@@ -27,7 +27,7 @@ import type {
  * The contract is docs/design/cash-staff-authority-v2.md: Identity Access
  * proves the employee (Staff Session v1.3, getStaffSessionPrincipalV1) and
  * names them in its published directory (UserIdentity.v1); Cash binds the
- * two Cash capabilities to a confirmed Администратор only. Nothing here reads
+ * two Cash capabilities to one of the three active Cash manager roles. Nothing here reads
  * the crm_user_id cookie, a header or a form field, and managerSession()
  * stays in front only as a gate that narrows. No session, or one Identity
  * Access cannot verify, writes nothing; the screens stay readable.

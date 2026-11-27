@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *
  * What has to hold: the manager picks both people themselves and nothing is
  * picked for them; recording says it changed no access; a write is offered
- * only when Identity Access's Staff Session of a confirmed Администратор can
+ * only when Identity Access's Staff Session of a confirmed Cash manager role can
  * make it; and the screen says only what the backend answered, including why
  * it may not write.
  */

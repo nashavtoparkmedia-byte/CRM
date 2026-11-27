@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 
 const queryCurrentUserV1 = vi.fn()
+const getStaffSessionPrincipalV1 = vi.fn()
+const listUserIdentitiesV1 = vi.fn()
 const compensationManagerActionV1 = vi.fn()
 const compensationManagerEvidenceSourceV1 = vi.fn()
 const readTelegramBotFileV1 = vi.fn()
@@ -18,6 +20,12 @@ const revalidatePath = vi.fn()
 vi.mock('next/cache', () => ({ revalidatePath: (path: string) => revalidatePath(path) }))
 vi.mock('@/modules/identity-access/public/v1/identity-actions', () => ({
     queryCurrentUserV1: (...args: unknown[]) => queryCurrentUserV1(...args),
+}))
+vi.mock('@/modules/identity-access/public/v1', () => ({
+    getStaffSessionPrincipalV1: () => getStaffSessionPrincipalV1(),
+}))
+vi.mock('@/modules/identity-access/public/v1/user-directory', () => ({
+    listUserIdentitiesV1: () => listUserIdentitiesV1(),
 }))
 vi.mock('@/modules/fleet-operations/public/v1', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
@@ -40,9 +48,20 @@ const MANAGER_USER = {
     status: 'Активен',
 }
 
-const ACTING = { principalId: 'crm_user:user-1', operatorLabel: 'Аня Менеджер' }
+const ACTING = { principalId: 'staff:user-1', operatorLabel: 'Аня Менеджер' }
 
-const signedInAs = (user: unknown) => queryCurrentUserV1.mockResolvedValue({ user })
+const signedInAs = (user: typeof MANAGER_USER | null | undefined) => {
+    queryCurrentUserV1.mockResolvedValue({ user })
+    getStaffSessionPrincipalV1.mockResolvedValue(user === null || user === undefined ? null : {
+        kind: 'staff_session',
+        userId: user.id,
+        role: user.role,
+        sid: 'c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00',
+        issuedAt: new Date(Date.now() - 60_000),
+        expiresAt: new Date(Date.now() + 3_600_000),
+    })
+    listUserIdentitiesV1.mockResolvedValue(user === null || user === undefined ? [] : [user])
+}
 
 beforeEach(() => {
     vi.clearAllMocks()
@@ -71,7 +90,7 @@ describe('who is allowed in', () => {
 
     it('refuses a disabled account', async () => {
         signedInAs({ ...MANAGER_USER, status: 'Отключён' })
-        expect(await managerSession()).toEqual({ ok: false, refusal: 'user_disabled' })
+        expect(await managerSession()).toEqual({ ok: false, refusal: 'user_identity_incomplete' })
     })
 
     it.each(MANAGER_ROLES_V1)('admits the %s role', async (role) => {

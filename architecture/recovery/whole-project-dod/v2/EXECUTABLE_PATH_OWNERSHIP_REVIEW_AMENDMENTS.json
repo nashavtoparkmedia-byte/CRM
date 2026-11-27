@@ -5001,6 +5001,122 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-compensation-staff-budget-panel-04f3caaa-20261127",
+      "reviewed_at": "2026-11-27T00:00:00Z",
+      "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+      "role": "PRIMARY_EXECUTOR_REVIEW",
+      "authorization": "OWNER_MANDATE_YOKO_CLEAN_PRODUCTION_READY_RESTORE_FIRST",
+      "predecessor_review": {
+        "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+        "role": "PRIMARY_EXECUTOR_REVIEW",
+        "immutable": true,
+        "note": "Extends the exact reviewed ownership chain without changing any existing assignment, lifecycle, or governed exclusion."
+      },
+      "reason": "The Cash Compensation readiness repair adds one bounded TEST surface and moves the budget server action into the already reviewed manager-data application surface. The production action keeps the existing Staff Session authority gate and canonical budget operation; no new executable exact inventory path, owner, lifecycle, exclusion or public contract is introduced. The exact denominator movement and source-byte rebinds were derived by the repository ownership preview on candidate 04f3caaa0cf941baa61e8c0c7ba4877af8ec3fc2.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2904,
+        "tracked_inventory_sha256": "e4588ef4a6a8c0bcf731b73fb32f9a9e2c2770cc28d5490d6de998bfd028538b",
+        "coverage_sha256": "d9dc27fede41896b33f1caf5512bcbabc2069273983fcb550c011fb988ca7d68"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2905,
+        "tracked_inventory_sha256": "0350fad64517c0eb88b2450640b041695b1ea97fcdff842d6bcfef8fabe20ea6",
+        "coverage_sha256": "7ab9e9a11d957a838f4d27e98631d30ede453d21014244ff016e754f923978d5"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/compensation/CompensationBudgetPanel.tsx",
+          "previous_source_sha256": "f1fd89ddbc69cff8b7d8a68b91c4410c6a580735f137e04183c00859ddfb4ec6",
+          "current_source_sha256": "dbce784e502e9ec80e95b8d4f9826f9a99e01dd97bf6ef4db12499f995394c08",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The panel change only wires the existing budget form to the manager-data server action. Rendering, ownership, Staff Session authority and the canonical budget operation remain unchanged; only the exact source fingerprint moves."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/manager-data.ts",
+          "previous_source_sha256": "f750853f3802f261568280a344213c301329b7f4f5351170404b7452378e660a",
+          "current_source_sha256": "4431cec61cc82b1beb69dbd6a854293b4a95cb26f647a42364c5afedf87a6333",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The manager-data change adds the existing budget provisioning entry point beside its Staff Session-gated manager reads. It forwards to the existing fleet-owned operation and changes no ownership, lifecycle, credential authority or public contract."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/actions.ts",
+          "previous_source_sha256": "72f0bff911757c0d4fe21cf33bebf310abd96dba5773f7e9a239b96b66488865",
+          "current_source_sha256": "222d47534acef7936160884dd381cc6e436152149c515f4bf9c8d23206d376ad",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The referral action change replaces the legacy integration-admin gate with the existing verified Staff Session Cash authority. Referral ownership, grant and revoke operations, audit behavior and public contracts remain unchanged."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/page.tsx",
+          "previous_source_sha256": "e400d0835358443a75b3e8f87b1bf704abc155237a56910b70adda4e6b85f716",
+          "current_source_sha256": "4fa884ad7a5c899d90e34c5245ae63eb5cd173eda85f7cc9030250dc66355b67",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The referral screen now reflects the existing Staff Session gate and three-role Cash policy. The page keeps the same domain surface, disabled referral flag behavior and no new Telegram entry point."
+        },
+        {
+          "path": "gravity-mvp/src/app/compensation/referrals/referral-data.ts",
+          "previous_source_sha256": "a8eb7c1790b85bb6bac46d3f121efa52fec18cb62d0395c44cbf0d083b59c409",
+          "current_source_sha256": "3f70a2446d6b8cbf26cada25e0675836ba1006d44857870b831c987223b3d5c8",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The referral authority comments and role policy remain on the existing fleet-owned public boundary. This rebind records the reviewed bytes only; grant, revoke, audit and identity invariants are unchanged."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    },
+    {
+      "amendment_id": "cash-compensation-navigation-65d59e6c-20261127",
+      "reviewed_at": "2026-11-27T00:00:00Z",
+      "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+      "role": "PRIMARY_EXECUTOR_REVIEW",
+      "authorization": "OWNER_MANDATE_YOKO_CASH_P0_CI_FAILURE_RECOVERY",
+      "predecessor_review": {
+        "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+        "role": "PRIMARY_EXECUTOR_REVIEW",
+        "immutable": true,
+        "note": "Extends the exact reviewed ownership chain without changing any existing assignment, lifecycle, governed exclusion, or public contract."
+      },
+      "reason": "The bounded Cash P0 repair restores one missing navigation link to the existing /compensation route under the already-owned fleet_operations surface. It changes only the exact source bytes of the reviewed navigation configuration; no executable ownership, lifecycle, functional owner, exclusion, public contract, Cash rule, or runtime capability changes. The authoritative preview identified one source fingerprint rebind and no denominator or assignment movement.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2905,
+        "tracked_inventory_sha256": "0350fad64517c0eb88b2450640b041695b1ea97fcdff842d6bcfef8fabe20ea6",
+        "coverage_sha256": "7ab9e9a11d957a838f4d27e98631d30ede453d21014244ff016e754f923978d5"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2905,
+        "tracked_inventory_sha256": "0350fad64517c0eb88b2450640b041695b1ea97fcdff842d6bcfef8fabe20ea6",
+        "coverage_sha256": "7ab9e9a11d957a838f4d27e98631d30ede453d21014244ff016e754f923978d5"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/config/navigation-domains.ts",
+          "previous_source_sha256": "c0241237871466d19a417973576f56cfbb1a122c5d12006cf5441b7f741ea609",
+          "current_source_sha256": "d21e43ac9f8fef81d46f9252d26668f4f974b575e1749c26405f09d0743ea98b",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The navigation change adds one link to the existing Cash Compensation route under the existing Drivers fleet_operations domain. It does not create a domain or screen, change ownership, lifecycle, authorization, route perimeter, public contract, business rule, or runtime capability; only the reviewed source fingerprint moves."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }

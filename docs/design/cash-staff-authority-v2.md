@@ -1,6 +1,6 @@
 # Cash staff authority v2 — Cash as a consumer of Staff Session v1.3
 
-**Status: WRITES WIRED to the published producer (Identity Access #212, in MAIN since 2026-11-10); the Contacts read authority (D2) is NOT PUBLISHED, so reads stay on the integration-admin principal.**
+**Status: Cash reads and writes are gated by the published Staff Session producer (Identity Access #212, in MAIN since 2026-11-10); the Contacts read authority (D2) is NOT PUBLISHED, so person visibility still remains a separate Contacts concern.**
 - On 2026-11-08 the Owner approved Staff Session v1.2 (`docs/design/staff-session-v1.md`, PR #200) as the employee identity of the CRM; v1.3 is the version Security passed as the final design and Identity Access built.
 - This document replaces v1 (`cash-staff-authority-v1.md`). v1's integration-admin facts (`getIntegrationAdminSessionFactsV1`) will not be built, not even as a step towards v2.
 - **Owners:**
@@ -35,7 +35,7 @@ Cash has no session, credential or middleware of its own.
 | `sessionId` | `sid` | `staff_session:` + sha256 of the labelled `sid`. One session gives one name. The ledger never holds the raw id. Only Identity Access's `sid` format binds: 64 lower-case hex digits. |
 | `authenticatedAt` | `issuedAt` | The login time. The session must satisfy `issuedAt ≤ now < expiresAt`. |
 | `operatorLabel` | the directory entry whose `id` is `userId` | «Имя Фамилия». The entry must be the only one with that id, have the same `role`, and be `Активен`. |
-| `capabilities` | `role` | `cash.referral.qualify` and `cash.access.manage`, only for **`Администратор`** (`CASH_STAFF_WRITE_ROLES_V1`). A Менеджер or Руководитель gets nothing until the Owner decides otherwise. |
+| `capabilities` | `role` | `cash.referral.qualify` and `cash.access.manage`, for the three active Cash manager roles **`Менеджер`**, **`Руководитель`** and **`Администратор`** (`CASH_STAFF_WRITE_ROLES_V1`). Other roles get nothing. |
 
 **Refusals:**
 - `staff_session_unavailable`: no session, a session Identity Access refused (forged, expired, revoked by either epoch, disabled user), or a session store or directory that does not answer. In all these cases there is no operator: Cash never falls back to another identity.
@@ -50,7 +50,7 @@ After binding, the existing writer boundary applies unchanged:
 
 ## 3. The referral screen's guards
 
-Writes are wired (the wiring PR on MAIN `42caee7e`); the read guards follow once D2 is published.
+Writes are wired (the wiring PR on MAIN `42caee7e`); the Cash manager screen now applies the same verified Staff Session gate to reads, while Contacts' D2 remains the authority for person visibility.
 
 - **Writes (wired).** The body of `resolveCashStaffAuthorityV1()` (`src/app/compensation/referrals/referral-data.ts`) is:
   ```ts
@@ -58,13 +58,12 @@ Writes are wired (the wiring PR on MAIN `42caee7e`); the read guards follow once
   ```
   - `managerSession()` stays in front only as a gate that narrows; it is never authority.
   - The integration-admin session writes nothing, as today.
-- **Reads (search, person card, history; waits for D2).**
-  - The actions stop calling `getIntegrationAdminPrincipal()` themselves. They ask Contacts' read authority (D2), because a search result names people and only Contacts decides who may see them.
-  - On top of that, a staff session must hold a Cash role (v1: `Администратор`, the same as writes).
-  - The integration-admin session keeps reading only as long as Contacts admits it.
+- **Reads (search, person card, history).**
+  - The actions require the same verified Staff Session-backed Cash manager gate as writes before invoking the existing Contacts lookup contract.
+  - Contacts' D2 remains the authority for which person data may be shown; Cash does not copy that rule.
 - **Page.**
   - `writesAvailable` comes from the write resolver, and the page shows its refusal: a Менеджер reads «Закреплять приглашения и выдавать доступ может только администратор.», and anyone a sign-in would help gets «Войти», which leads to the staff `/login` (wired).
-  - `lookupAvailable` comes from the integration-admin principal until D2, then from Contacts' answer; its «Войти» then also leads to `/login`, not to `/settings/integrations/access`.
+  - `lookupAvailable` is true only for an admitted Staff Session and the existing Contacts answer; its «Войти» leads to `/login`, not to `/settings/integrations/access`.
   - The new refusals have their own texts (wired).
 - **C2 source control (wired):** `tools/architecture/check-cash-referral-staff-authority-boundary.mjs`, a boundary control every hosted CI run executes.
   - The four write functions are called only from `actions.ts`, once each, with the authority the server resolved.
@@ -74,7 +73,7 @@ Writes are wired (the wiring PR on MAIN `42caee7e`); the read guards follow once
   - Production source is every tracked source file not named as a test (`.test.` / `.spec.`), so routes under a `/test/` directory are covered.
   - No `authority` object literal or Cash capability name appears outside the binder and the ledger's own definitions.
   - The actions and the resolver read no cookie, header, `crm_user_id` or current-user record.
-  - The binder's write roles stay `['Администратор']` and its `sid` format stays Identity Access's.
+  - The binder's write roles stay `['Менеджер', 'Руководитель', 'Администратор']` and its `sid` format stays Identity Access's.
   - Each rule also runs against a mutated copy of the tree, and the control fails if a mutant escapes.
 - **Governance.** These are source-hash-pinned referral screen paths, so the PR carries an ownership amendment.
 - **Nothing else changes.** No migration, ledger or money change is part of the wiring.

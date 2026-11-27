@@ -10,7 +10,6 @@ import {
     cashReferralManagerSearchV1,
     cashReferralManagerWithdrawInvitationV1,
 } from '@/modules/fleet-operations/public/v1'
-import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 import { managerSession } from '../manager-data'
 import { candidateView, personView, resolveCashStaffAuthorityV1 } from './referral-data'
@@ -19,15 +18,10 @@ import type { ReferralPersonResponse, ReferralSearchResponse, ReferralWriteRespo
 /**
  * The referral screens' server actions.
  *
- * Reads need the same CRM manager session as the rest of /compensation,
- * and the verified integration-admin principal besides: the search's answer
- * comes from Contacts' ContactLookup.v1, which names people only to a caller
- * who may open the person card they lead to, and the person card is where
- * that search leads, so Cash hands neither to a weaker caller. Writes need
- * the manager session and a signed staff
- * session besides; no action takes a principal, a role or a capability from
- * the browser. Every write answers with the backend's own code, never a
- * success it did not confirm.
+ * Reads and writes require the same verified Staff Session and one of the
+ * three Cash manager roles. No action takes a principal, a role or a
+ * capability from the browser. Every write answers with the backend's own
+ * code, never a success it did not confirm.
  */
 
 const PATH = '/compensation/referrals'
@@ -35,7 +29,6 @@ const PATH = '/compensation/referrals'
 export async function searchReferralPeople(query: string): Promise<ReferralSearchResponse> {
     const session = await managerSession()
     if (!session.ok) return { status: 'refused', reason: session.refusal }
-    if (await getIntegrationAdminPrincipal() === null) return { status: 'refused', reason: 'admin_session_required' }
     const result = await cashReferralManagerSearchV1(query)
     if (result.status !== 'ok') return { status: 'refused', reason: result.status === 'disabled' ? 'disabled' : result.reason }
     return { status: 'ok', candidates: result.candidates.map(candidateView), truncated: result.truncated }
@@ -44,7 +37,6 @@ export async function searchReferralPeople(query: string): Promise<ReferralSearc
 export async function loadReferralPerson(contactId: string): Promise<ReferralPersonResponse> {
     const session = await managerSession()
     if (!session.ok) return { status: 'refused', reason: session.refusal }
-    if (await getIntegrationAdminPrincipal() === null) return { status: 'refused', reason: 'admin_session_required' }
     const result = await cashReferralManagerPersonV1(contactId)
     if (result.status !== 'ok') return { status: 'refused', reason: result.status }
     return { status: 'ok', person: personView(result.card) }

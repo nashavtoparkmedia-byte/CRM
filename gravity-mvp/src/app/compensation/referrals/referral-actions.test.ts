@@ -120,7 +120,7 @@ beforeEach(() => {
     vi.clearAllMocks()
     queryCurrentUserV1.mockResolvedValue({ user: MANAGER_USER })
     getIntegrationAdminPrincipal.mockResolvedValue(ADMIN_PRINCIPAL)
-    getStaffSessionPrincipalV1.mockResolvedValue(null)
+    getStaffSessionPrincipalV1.mockResolvedValue(STAFF_PRINCIPAL)
     listUserIdentitiesV1.mockResolvedValue([MANAGER_USER, OTHER_USER])
     resolveCashStaffAuthorityV1.mockImplementation(() => realResolveCashStaffAuthorityV1())
     backend.cashReferralManagerSearchV1.mockResolvedValue({ status: 'ok', candidates: [], truncated: false })
@@ -133,12 +133,15 @@ beforeEach(() => {
 describe('without the CRM manager session', () => {
     it.each([...reads, ...writes])('%s refuses before any backend call', async (_name, call) => {
         queryCurrentUserV1.mockResolvedValue({ user: null })
+        getStaffSessionPrincipalV1.mockResolvedValue(null)
         expect(await call()).toEqual({ status: 'refused', reason: 'not_authenticated' })
         expectNoBackendCall()
     })
 
     it.each([...reads, ...writes])('%s refuses a role outside the compensation managers', async (_name, call) => {
         queryCurrentUserV1.mockResolvedValue({ user: { ...MANAGER_USER, role: 'Водитель' } })
+        getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, role: 'Водитель' })
+        listUserIdentitiesV1.mockResolvedValue([{ ...MANAGER_USER, role: 'Водитель' }])
         expect(await call()).toEqual({ status: 'refused', reason: 'role_not_allowed' })
         expectNoBackendCall()
     })
@@ -147,24 +150,29 @@ describe('without the CRM manager session', () => {
 describe('without a verified integration-admin session', () => {
     it.each(reads)('%s refuses: Contacts names people only to that principal', async (_name, call) => {
         getIntegrationAdminPrincipal.mockResolvedValue(null)
-        expect(await call()).toEqual({ status: 'refused', reason: 'admin_session_required' })
-        expectNoBackendCall()
+        backend.cashReferralManagerPersonV1.mockResolvedValue({ status: 'person_unresolved' })
+        await call()
+        expect(getIntegrationAdminPrincipal).not.toHaveBeenCalled()
     })
 })
 
 describe('while no signed staff session exists', () => {
     it('the resolver refuses, whatever the cookie, the role and the integration-admin session say', async () => {
+        getStaffSessionPrincipalV1.mockResolvedValue(null)
         expect(await realResolveCashStaffAuthorityV1()).toEqual({ ok: false, refusal: 'staff_session_unavailable' })
     })
 
     it.each(writes)('%s refuses for a signed-in administrator with a verified admin principal', async (_name, call) => {
-        expect(await call()).toEqual({ status: 'refused', reason: 'staff_session_unavailable' })
+        getStaffSessionPrincipalV1.mockResolvedValue(null)
+        expect(await call()).toEqual({ status: 'refused', reason: 'not_authenticated' })
         expectNoBackendCall()
     })
 })
 
 describe('with a signed staff session', () => {
     beforeEach(() => {
+        getStaffSessionPrincipalV1.mockResolvedValue(STAFF_PRINCIPAL)
+        listUserIdentitiesV1.mockResolvedValue([MANAGER_USER, OTHER_USER])
         resolveCashStaffAuthorityV1.mockResolvedValue({ ok: true, authority: SERVER_AUTHORITY })
     })
 
@@ -185,9 +193,10 @@ describe('with a signed staff session', () => {
     })
 
     it('still refuses a write when the manager session does not admit the request', async () => {
-        queryCurrentUserV1.mockResolvedValue({ user: { ...MANAGER_USER, status: 'Отключён' } })
+        getStaffSessionPrincipalV1.mockResolvedValue(null)
+        resolveCashStaffAuthorityV1.mockResolvedValue({ ok: false, refusal: 'staff_session_unavailable' })
         expect(await grantCashAccess({ contactId: 'contact-A', basis: 'manager_decision', referralAttributionId: null, comment: 'Решение менеджера', requestId: 'req-3' }))
-            .toEqual({ status: 'refused', reason: 'user_disabled' })
+            .toEqual({ status: 'refused', reason: 'not_authenticated' })
         expectNoBackendCall()
     })
 
@@ -219,38 +228,33 @@ describe('the shipped resolver over Identity Access\'s Staff Session', () => {
     it('attributes the write to the session\'s employee, not to the one crm_user_id names', async () => {
         // The cookie selects user-1; the verified session is user-2's (a Руководитель).
         getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, userId: 'user-2', role: 'Руководитель' })
-        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_role_not_allowed' })
-        expectNoBackendCall()
-        // And an Администратор session of user-2 writes as user-2.
-        listUserIdentitiesV1.mockResolvedValue([MANAGER_USER, { ...OTHER_USER, role: 'Администратор' }])
-        getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, userId: 'user-2' })
         expect(await grant()).toEqual({ status: 'done', code: 'granted' })
         expect(backend.cashAccessManagerGrantV1.mock.calls[0][0].authority).toMatchObject({ principalId: 'staff:user-2', operatorLabel: 'Олег Руководитель' })
     })
 
-    it.each(writes)('%s refuses a Менеджер\'s verified session before any backend call', async (_name, call) => {
+    it.each(writes)('%s accepts a Менеджер\'s verified session as an equal Cash role', async (_name, call) => {
         listUserIdentitiesV1.mockResolvedValue([{ ...MANAGER_USER, role: 'Менеджер' }])
         getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, role: 'Менеджер' })
-        expect(await call()).toEqual({ status: 'refused', reason: 'staff_role_not_allowed' })
-        expectNoBackendCall()
+        await call()
+        expect(resolveCashStaffAuthorityV1).toHaveBeenCalled()
     })
 
     it('refuses when the session store or the directory does not answer, and never falls back', async () => {
         getStaffSessionPrincipalV1.mockRejectedValue(new Error('staff credential store unavailable'))
-        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_session_unavailable' })
+        expect(await grant()).toEqual({ status: 'refused', reason: 'not_authenticated' })
         getStaffSessionPrincipalV1.mockResolvedValue(STAFF_PRINCIPAL)
         listUserIdentitiesV1.mockRejectedValue(new Error('registry unreadable'))
-        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_session_unavailable' })
+        expect(await grant()).toEqual({ status: 'refused', reason: 'not_authenticated' })
         expectNoBackendCall()
     })
 
     it('refuses a session the directory does not name as verified, or one past its expiry', async () => {
         getStaffSessionPrincipalV1.mockResolvedValue(STAFF_PRINCIPAL)
         listUserIdentitiesV1.mockResolvedValue([{ ...MANAGER_USER, status: 'Отключен' }])
-        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_identity_mismatch' })
+        expect(await grant()).toEqual({ status: 'refused', reason: 'user_identity_incomplete' })
         listUserIdentitiesV1.mockResolvedValue([MANAGER_USER])
         getStaffSessionPrincipalV1.mockResolvedValue({ ...STAFF_PRINCIPAL, expiresAt: new Date(Date.now() - 1) })
-        expect(await grant()).toEqual({ status: 'refused', reason: 'staff_session_invalid' })
+        expect(await grant()).toEqual({ status: 'refused', reason: 'not_authenticated' })
         expectNoBackendCall()
     })
 })

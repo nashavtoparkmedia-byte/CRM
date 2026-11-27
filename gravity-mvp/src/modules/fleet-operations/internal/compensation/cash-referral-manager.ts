@@ -129,11 +129,13 @@ export interface CashStaffDirectoryEntryV1 {
 }
 
 /**
- * Who may write Cash referral and access decisions (Owner, 2026-11-08): a
- * confirmed Администратор, and no other role. A Менеджер or Руководитель
- * holds no Cash capability until the Owner decides otherwise.
+ * Who may write Cash referral and access decisions (Owner, Cash Compensation
+ * production specification): every active CRM staff role that is explicitly
+ * admitted to the Cash manager surface. The Staff Session and directory still
+ * prove the employee; the role list only maps the three existing CRM roles to
+ * the two existing Cash capabilities.
  */
-export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']
+export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Менеджер', 'Руководитель', 'Администратор']
 
 export type CashStaffSessionBindingRefusalV1 =
     /** No session, another principal kind, a malformed one, or one outside its lifetime. */

@@ -272,8 +272,8 @@ describe('the manager screens act only through the service', () => {
     })
 
     it('resolves the acting manager from the session, never from the client', () => {
-        expect(MANAGER_DATA).toContain('queryCurrentUserV1')
-        expect(MANAGER_DATA).toContain('resolveCompensationManagerPrincipalV1')
+        expect(MANAGER_DATA).toContain('getStaffSessionPrincipalV1')
+        expect(MANAGER_DATA).toContain('resolveCashStaffAuthorityV1')
         expect(MANAGER_ACTIONS).toContain('await managerSession()')
         // The browser sends an application id, an action and a reason. If it
         // could send a principal, a crafted post would put someone else's name

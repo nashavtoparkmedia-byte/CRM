@@ -229,7 +229,7 @@ describe('the Cash authority of a verified Staff Session', () => {
         return result.bound ? 'bound' : result.refusal
     }
 
-    it('binds a confirmed Администратор to exactly the two Cash capabilities, under their own name and session', () => {
+    it('binds each Cash manager role to exactly the two Cash capabilities, under its own name and session', () => {
         const result = bind(principal)
         expect(result.bound).toBe(true)
         if (!result.bound) return
@@ -299,9 +299,9 @@ describe('the Cash authority of a verified Staff Session', () => {
         expect(refusal(principal, { ...entry, firstName: ' ', lastName: '' })).toBe('staff_identity_mismatch')
     })
 
-    it('gives no Cash capability to a verified employee who is not a confirmed Администратор', () => {
-        expect(CASH_STAFF_WRITE_ROLES_V1).toEqual(['Администратор'])
-        for (const role of ['Менеджер', 'Руководитель', 'администратор', 'Администратор ', '']) {
+    it('gives no Cash capability to a verified employee outside the three Cash manager roles', () => {
+        expect(CASH_STAFF_WRITE_ROLES_V1).toEqual(['Менеджер', 'Руководитель', 'Администратор'])
+        for (const role of ['Оператор', 'Водитель', 'администратор', 'Администратор ', '']) {
             expect(refusal({ ...principal, role }, { ...entry, role })).toBe('staff_role_not_allowed')
         }
     })
@@ -326,7 +326,7 @@ describe('the Cash authority of a verified Staff Session', () => {
             .toEqual({ ok: false, refusal: 'staff_identity_mismatch' })
         expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => principal, directory: async () => [entry, { ...entry, firstName: 'Другой' }], now }))
             .toEqual({ ok: false, refusal: 'staff_identity_mismatch' })
-        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => ({ ...principal, role: 'Менеджер' }), directory: async () => [{ ...entry, role: 'Менеджер' }], now }))
+        expect(await resolveCashStaffAuthorityFromSessionV1({ principal: async () => ({ ...principal, role: 'Оператор' }), directory: async () => [{ ...entry, role: 'Оператор' }], now }))
             .toEqual({ ok: false, refusal: 'staff_role_not_allowed' })
     })
 })

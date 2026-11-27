@@ -1,4 +1,5 @@
 import { rublesFromKopecks } from './money'
+import { provisionCompensationBudget } from './manager-data'
 
 export interface CompensationBudgetPanelView {
     periodKey: string
@@ -28,6 +29,7 @@ export default function CompensationBudgetPanel({ budget }: { budget: Compensati
                 <p className="mt-1 text-[13px] text-muted">
                     Пока месяц не открыт, водители не могут подать заявку, а выплаты по нему не начисляются.
                 </p>
+                <BudgetProvisioningForm periodKey={budget.periodKey} defaultLimitKopecks={500_000} />
             </div>
         )
     }
@@ -62,6 +64,34 @@ export default function CompensationBudgetPanel({ budget }: { budget: Compensati
                     разработчикам.
                 </p>
             )}
+            <BudgetProvisioningForm periodKey={budget.periodKey} defaultLimitKopecks={budget.limitKopecks} />
         </div>
+    )
+}
+
+function BudgetProvisioningForm({ periodKey, defaultLimitKopecks }: { periodKey: string; defaultLimitKopecks: number }) {
+    return (
+        <form action={provisionCompensationBudget} className="border-t border-border px-4 py-3" data-testid="budget-provisioning-form">
+            <div className="text-[13px] font-medium text-foreground">Открыть или увеличить бюджет</div>
+            <p className="mt-1 text-[12px] text-muted">
+                Укажите сумму в рублях. Уже установленный лимит нельзя уменьшить или закрыть этим действием.
+            </p>
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+                <input type="hidden" name="periodKey" value={periodKey} />
+                <label className="flex flex-col gap-1 text-[12px] text-muted">
+                    Сумма, ₽
+                    <input
+                        name="limitRubles"
+                        inputMode="decimal"
+                        defaultValue={String(Math.floor(defaultLimitKopecks / 100))}
+                        className="h-10 w-32 rounded-lg border border-border px-3 text-[14px] text-foreground"
+                        aria-label="Сумма бюджета в рублях"
+                    />
+                </label>
+                <button type="submit" className="h-10 rounded-lg border border-border px-3 text-[14px] text-foreground">
+                    Сохранить лимит
+                </button>
+            </div>
+        </form>
     )
 }

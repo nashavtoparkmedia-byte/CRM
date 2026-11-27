@@ -279,6 +279,17 @@ describe('one claim', () => {
         await waitFor(() => expect(text(screen.getByRole('status'))).toContain('some_new_code'))
     })
 
+    it('keeps an unavailable-evidence refusal visible and refreshes without claiming approval', async () => {
+        runCompensationManagerAction.mockResolvedValue({ code: 'evidence_unavailable', state: null })
+        render(<CompensationApplicationDetail application={detailView()} />)
+        fireEvent.click(screen.getByText('Одобрить'))
+        fireEvent.click(screen.getByText('Подтвердить'))
+
+        await waitFor(() => expect(text(screen.getByRole('status'))).toContain('Скриншот сейчас недоступен'))
+        expect(text(screen.getByTestId('application-detail'))).toContain('Новая')
+        expect(refresh).toHaveBeenCalled()
+    })
+
     describe('the support reply', () => {
         const fetchMock = vi.fn()
         const respond = (status: number, type: string | null, bytes = [1, 2, 3]) =>
