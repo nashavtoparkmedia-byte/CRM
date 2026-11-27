@@ -1,7 +1,6 @@
 import Link from 'next/link'
 
 import { cashReferralManagerEnabledV1 } from '@/modules/fleet-operations/public/v1'
-import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 import { managerSession } from '../manager-data'
 import ReferralManager from './ReferralManager'
@@ -13,9 +12,9 @@ export const dynamic = 'force-dynamic'
 export default async function CompensationReferralsPage() {
     const session = await managerSession()
     const enabled = cashReferralManagerEnabledV1()
-    // Finding people asks Contacts' ContactLookup.v1, answered only to the verified integration-admin principal.
-    const lookupAvailable = session.ok && enabled && (await getIntegrationAdminPrincipal()) !== null
-    // Writing needs Identity Access's Staff Session of a confirmed Администратор; the page only says which answer it got.
+    // All Cash manager capabilities, including person lookup, require the
+    // verified Staff Session already admitted by managerSession().
+    const lookupAvailable = session.ok && enabled
     const staff = lookupAvailable ? await resolveCashStaffAuthorityV1() : null
     const writesAvailable = staff !== null && staff.ok
     const writesRefusal = staff !== null && !staff.ok ? staff.refusal : 'staff_session_unavailable'
@@ -30,9 +29,8 @@ export default async function CompensationReferralsPage() {
             {!session.ok && <p className="text-sm text-muted">{refusalText(session.refusal)}</p>}
             {session.ok && !enabled && <p className="text-sm text-muted">{refusalText('disabled')}</p>}
             {session.ok && enabled && !lookupAvailable && (
-                <p className="rounded-xl border border-border bg-surface p-4 text-[15px] text-foreground" data-testid="admin-session-required">
-                    {refusalText('admin_session_required')}{' '}
-                    <a href="/settings/integrations/access?next=%2Fcompensation%2Freferrals" className="font-medium text-primary">Войти</a>
+                <p className="rounded-xl border border-border bg-surface p-4 text-[15px] text-foreground">
+                    Войдите через Staff Session, чтобы открыть инструменты Cash.
                 </p>
             )}
             {lookupAvailable && <ReferralManager writesAvailable={writesAvailable} writesRefusal={writesRefusal} />}

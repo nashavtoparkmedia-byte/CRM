@@ -3,7 +3,7 @@
 // Cash referral staff authority — boundary control (C2).
 //
 // A Cash referral or access write is made by Identity Access's Staff Session
-// of a confirmed Администратор, bound by Cash's own binder
+// of an active Cash manager role, bound by Cash's own binder
 // (docs/design/cash-staff-authority-v2.md). The binder and the database CHECK
 // refuse every other writer, but both trust the authority object they are
 // handed. This control holds the one path that object may take, so a new
@@ -25,8 +25,9 @@
 //     written anywhere but the binder and the ledger's own definitions;
 //   - neither the actions nor the resolver read a cookie, a header, the
 //     crm_user_id lane or the current-user record;
-//   - the binder's write roles stay exactly the Owner's initial policy
-//     (Администратор) and its sid format stays Identity Access's 64 hex digits;
+//   - the binder's write roles stay exactly the Cash policy (Менеджер,
+//     Руководитель, Администратор) and its sid format stays Identity Access's
+//     64 hex digits;
 //   - outside fleet_operations, the whole Fleet module (a namespace import, a
 //     require, a dynamic import kept whole) is held only where it is today,
 //     the instrumentation's scheduler bootstrap, so no new handle can reach a
@@ -87,7 +88,7 @@ const WRITER_SOURCE = `async function writer(): Promise<{ ok: true; authority: P
     return { ok: true, authority: staff.authority }
 }`
 const ACTING_BINDING = 'const acting = await writer()'
-const WRITE_ROLES = "export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']"
+const WRITE_ROLES = "export const CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Менеджер', 'Руководитель', 'Администратор']"
 const SID_FORMAT = 'const STAFF_SESSION_SID_PATTERN_V1 = /^[0-9a-f]{64}$/u'
 // The files outside fleet_operations that may hold the whole Fleet module.
 const WHOLE_MODULE_HOLDERS = ['gravity-mvp/src/instrumentation.node.ts']
@@ -188,7 +189,7 @@ export function evaluate(tree) {
     }
 
     // 2. The screen resolver is the binder's only caller and hands it Identity Access's reads and the server clock.
-    only('only the screen and its actions ask the screen resolver', SCREEN_RESOLVER, [DATA, ACTIONS, PAGE])
+    only('only the Cash screens and their actions ask the screen resolver', SCREEN_RESOLVER, [DATA, ACTIONS, PAGE, 'gravity-mvp/src/app/compensation/manager-data.ts'])
     only('only the screen resolver calls the binder', BINDER_RESOLVER, [BINDER, OPERATIONS, PUBLIC_INDEX, DATA])
     only('the binding function stays inside the binder', BINDER_FUNCTION, [BINDER])
     const resolverCalls = callArguments(data, BINDER_RESOLVER)
@@ -230,7 +231,7 @@ export function evaluate(tree) {
     }
 
     // 6. The Owner's write policy and Identity Access's sid format stay pinned in the binder.
-    if (!binder.includes(WRITE_ROLES)) fail('Cash writes stay with the Администратор role', `expected: ${WRITE_ROLES}`)
+    if (!binder.includes(WRITE_ROLES)) fail('Cash writes stay with the three Cash manager roles', `expected: ${WRITE_ROLES}`)
     if (!binder.includes(SID_FORMAT)) fail('the binder admits only Identity Access\'s sid format', `expected: ${SID_FORMAT}`)
     return failures
 }
@@ -261,7 +262,7 @@ const MUTANTS = [
     ['the resolver reading the cookie', (tree) => tree.set(DATA, `${tree.get(DATA)}\nexport const lane = () => cookies().get('crm_user_id')\n`), 'the actions and the resolver read no browser value'],
     ['a namespace handle on the Fleet module', (tree) => tree.set(`${REFERRALS}rogue-namespace.ts`, "import * as fleet from '@/modules/fleet-operations/public/v1'\nexport const pick = (name) => fleet[name]\n"), 'the whole Fleet module is held only by the scheduler bootstrap'],
     ['a whole dynamic import of the Fleet module', (tree) => tree.set(`${SOURCE_ROOT}app/rogue-dynamic.ts`, "export const load = () => import('@/modules/fleet-operations/public/v1').then((fleet) => fleet)\n"), 'the whole Fleet module is held only by the scheduler bootstrap'],
-    ['a Менеджер admitted to write', (tree) => tree.set(BINDER, replaceOnce(tree.get(BINDER), "CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор']", "CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Администратор', 'Менеджер']")), 'Cash writes stay with the Администратор role'],
+    ['an Оператор admitted to write', (tree) => tree.set(BINDER, replaceOnce(tree.get(BINDER), WRITE_ROLES, "CASH_STAFF_WRITE_ROLES_V1: readonly string[] = ['Менеджер', 'Руководитель', 'Администратор', 'Оператор']")), 'Cash writes stay with the three Cash manager roles'],
     ['any sid admitted', (tree) => tree.set(BINDER, replaceOnce(tree.get(BINDER), 'STAFF_SESSION_SID_PATTERN_V1 = /^[0-9a-f]{64}$/u', 'STAFF_SESSION_SID_PATTERN_V1 = /^.+$/u')), 'the binder admits only Identity Access\'s sid format'],
 ]
 

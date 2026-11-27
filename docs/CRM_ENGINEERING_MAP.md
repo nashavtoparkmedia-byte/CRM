@@ -24,6 +24,12 @@ Partial update 2026-11-25: the P0 driver connection path is CRM-canonical. `tg-b
 records profile state through the signed `register_bot_user` contract and no longer requires the legacy Google Sheets
 writer for connection registration. Google Sheets remains an optional legacy survey/export surface only; it is not a
 P0 readiness dependency. Verified against candidate `ce425ff252dd9dfd0408ed69fab9e610211af188`.
+
+Partial update 2026-11-27: Cash manager screens now use the verified Staff Session authority for all manager reads and
+writes, with `Менеджер`, `Руководитель`, and `Администратор` as the existing Cash manager roles. Budget provisioning
+is exposed through the existing `ensureCompensationBudgetPeriodV1` operation; `CompensationBudgetPeriod` remains the
+single source of truth and the default is 500000 kopecks. Production flags and Staff Session enforcement remain
+dormant until the persistent registry, secret, and owner-approved UAT are complete.
 Partial update 2026-11-26: the driver-facing Telegram admin is embedded at the CRM apex on same-origin `/bot-admin`.
 `BOT_ADMIN_DOMAIN` remains disabled; Nginx strips the external prefix before proxying to the Next.js admin, whose
 `/bot-admin` base path keeps assets and API routes isolated. The panel retains its own HttpOnly staff session and
@@ -536,7 +542,11 @@ Each entry lists what the code actually does.
     UI `G/app/compensation/referrals/`; bot entry `tg-bot/src/handlers/referral.js`.
     Switches: `YOKO_CASH_ACCESS_LEDGER=on` (manager screens; Cash reads referral and manual
     access from the ledger), `YOKO_CASH_REFERRAL_ACCESS=on` (the Telegram referral path),
-    `BOT_REFERRAL_ENTRY_ENABLED=true` (the bot menu entry). All three default off.
+    `BOT_REFERRAL_ENTRY_ENABLED=true` (the bot menu entry). All three default off. Cash
+    manager reads/writes require a verified Staff Session and one of the existing roles
+    `Менеджер`, `Руководитель`, or `Администратор`; the browser `crm_user_id` selector is
+    not an authority. Budget provisioning is the existing `ensureCompensationBudgetPeriodV1`
+    operation surfaced by `G/app/compensation/` and keeps `CompensationBudgetPeriod` canonical.
 - **Cash-order ingestion modes** (`YOKO_CASH_ORDER_INGESTION_MODE`, parsed in
   `COMP/cash-order-ingestion-config.ts`; parks in `YOKO_CASH_COMPENSATION_PARKS`):
   - `off` (default; also any unknown or retired value): no provider request, no write.
@@ -1158,15 +1168,18 @@ application, reservation, audit event) + `CompensationPilotSubmission`.
 be fetched) → `compensationManagerActionV1` → `performManagerActionV1`
 (`COMP/compensation-manager-service.ts`) → start payout / finalize (settlement) /
 release / reject / resolve reconciliation in the adapter.
-Budget control: `gravity-mvp/scripts/compensation-budget-period.ts`.
+Budget control: `G/modules/fleet-operations/application/compensation-budget-period-operations.ts`
+(`ensureCompensationBudgetPeriodV1`) is the canonical operation; the CLI
+`gravity-mvp/scripts/compensation-budget-period.ts` and the CRM budget form both delegate to it.
 
 **F-24a Referral manager tools (S4)**
 `G/app/compensation/referrals/actions.ts` → CRM manager session (`managerSession`) →
-the search and the person card also need the verified integration-admin principal
-(`getIntegrationAdminPrincipal`; ContactLookup.v1 answers only it) → every write also
-needs `resolveCashStaffAuthorityV1` (`referral-data.ts` → `resolveCashStaffAuthorityFromSessionV1`
-with Identity Access's `getStaffSessionPrincipalV1`, `listUserIdentitiesV1` and the server
-clock; only a confirmed `Администратор` writes, `docs/design/cash-staff-authority-v2.md`;
+the search and the person card use the verified Staff Session-backed Cash manager gate →
+every write also needs `resolveCashStaffAuthorityV1` (`referral-data.ts` →
+`resolveCashStaffAuthorityFromSessionV1` with Identity Access's
+`getStaffSessionPrincipalV1`, `listUserIdentitiesV1` and the server clock; only a
+confirmed `Менеджер`, `Руководитель`, or `Администратор` can write,
+`docs/design/cash-staff-authority-v2.md`;
 the allowlist is held by `check-cash-referral-staff-authority-boundary.mjs`) → `cashReferralManager*V1` /
 `cashAccessManager{Grant,Revoke}V1` (`application/cash-referral-manager-operations.ts`,
 behind `YOKO_CASH_ACCESS_LEDGER=on`) → `COMP/cash-referral-manager-service.ts` → the
