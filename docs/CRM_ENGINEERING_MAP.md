@@ -33,6 +33,9 @@ Partial update 2026-11-26: F-26 manual Fleet sync starts the existing fenced run
 `SyncStatus` polling and a client refresh on terminal status; the request no longer holds the provider wait budget.
 The reconciler also reuses stored Fleet `created_date` evidence for legacy Driver rows when a later response omits
 that optional field. Verified against candidate `b2977cfac7fb1d9ef792244ced553c7194350886`.
+Partial update 2026-11-27: F-26 bulk Fleet profile reads pin the documented
+`driver_profile.created_date` sort order before offset pagination; provider throttling
+remains bounded and fail-closed. Verified against candidate `5e3e618e`.
 
 # YOKO CRM — Engineering Map
 

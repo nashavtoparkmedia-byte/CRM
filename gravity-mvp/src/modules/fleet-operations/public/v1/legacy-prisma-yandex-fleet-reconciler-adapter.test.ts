@@ -441,6 +441,8 @@ describe('a nightly read of a park paces itself and survives Yandex throttling',
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await read).toHaveLength(2500)
     expect(offsets()).toEqual([0, 1000, 2000])
+    const firstBody = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(firstBody.sort_order).toEqual([{ direction: 'asc', field: 'driver_profile.created_date' }])
   })
 
   test('honours Retry-After, asks for the same page again and widens the gap for the rest of the park', async () => {
