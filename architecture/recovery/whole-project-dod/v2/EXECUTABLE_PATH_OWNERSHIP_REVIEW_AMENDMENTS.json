@@ -5073,6 +5073,50 @@
         "governed_exclusion_changes": 0,
         "rationale_changes": 0
       }
+    },
+    {
+      "amendment_id": "cash-compensation-navigation-65d59e6c-20261127",
+      "reviewed_at": "2026-11-27T00:00:00Z",
+      "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+      "role": "PRIMARY_EXECUTOR_REVIEW",
+      "authorization": "OWNER_MANDATE_YOKO_CASH_P0_CI_FAILURE_RECOVERY",
+      "predecessor_review": {
+        "reviewed_by": "YOKO_P0_PRIMARY_EXECUTOR",
+        "role": "PRIMARY_EXECUTOR_REVIEW",
+        "immutable": true,
+        "note": "Extends the exact reviewed ownership chain without changing any existing assignment, lifecycle, governed exclusion, or public contract."
+      },
+      "reason": "The bounded Cash P0 repair restores one missing navigation link to the existing /compensation route under the already-owned fleet_operations surface. It changes only the exact source bytes of the reviewed navigation configuration; no executable ownership, lifecycle, functional owner, exclusion, public contract, Cash rule, or runtime capability changes. The authoritative preview identified one source fingerprint rebind and no denominator or assignment movement.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2905,
+        "tracked_inventory_sha256": "0350fad64517c0eb88b2450640b041695b1ea97fcdff842d6bcfef8fabe20ea6",
+        "coverage_sha256": "7ab9e9a11d957a838f4d27e98631d30ede453d21014244ff016e754f923978d5"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2905,
+        "tracked_inventory_sha256": "0350fad64517c0eb88b2450640b041695b1ea97fcdff842d6bcfef8fabe20ea6",
+        "coverage_sha256": "7ab9e9a11d957a838f4d27e98631d30ede453d21014244ff016e754f923978d5"
+      },
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/config/navigation-domains.ts",
+          "previous_source_sha256": "c0241237871466d19a417973576f56cfbb1a122c5d12006cf5441b7f741ea609",
+          "current_source_sha256": "d21e43ac9f8fef81d46f9252d26668f4f974b575e1749c26405f09d0743ea98b",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The navigation change adds one link to the existing Cash Compensation route under the existing Drivers fleet_operations domain. It does not create a domain or screen, change ownership, lifecycle, authorization, route perimeter, public contract, business rule, or runtime capability; only the reviewed source fingerprint moves."
+        }
+      ],
+      "unassigned_tracked_surfaces": [],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
     }
   ]
 }
