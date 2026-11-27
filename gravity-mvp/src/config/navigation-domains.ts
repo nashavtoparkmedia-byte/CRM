@@ -2,7 +2,7 @@ import {
     LayoutDashboard, Users, UserPlus, ShieldAlert, MessageSquare, UserCog, ToggleRight, ListRestart,
     Gift, CheckSquare, Database, BarChart3, Settings,
     IdCard, Activity, Archive, Clock, UserCheck, AlertCircle,
-    TrendingDown, Ban, Eye, MessageCircle, Bot, FileText,
+    TrendingDown, Ban, Eye, MessageCircle, Bot, FileText, Banknote,
     Timer, History, BarChart2, Phone, Smartphone, Key, CarFront, Link2,
     Megaphone, Filter, PieChart, LucideIcon, Cpu, Sparkles, BookOpen,
 } from "lucide-react";
@@ -56,6 +56,7 @@ export const DOMAINS: NavigationDomain[] = [
         items: [
             { label: 'Водители', href: '/drivers', icon: Users, sectionKey: 'drivers' },
             { label: 'Карточки', href: '/drivers/cards', icon: IdCard, sectionKey: 'cards' },
+            { label: 'Компенсации', href: '/compensation', icon: Banknote, sectionKey: 'compensation' },
             { label: 'Мониторинг', href: '/monitoring', icon: Activity, sectionKey: 'monitoring' },
             { label: 'Архив', href: '/drivers/archive', icon: Archive, sectionKey: 'archive' }
         ]
