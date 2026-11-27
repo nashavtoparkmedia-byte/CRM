@@ -256,6 +256,13 @@ export async function fetchParkProfiles(
             car: [],
             account: [],
           },
+          // Fleet pagination is offset-based rather than snapshot/cursor-based.
+          // Pin the documented stable field order for bulk reads so a dataset
+          // change between pages cannot silently reshuffle the window. This
+          // does not relax provider limits or turn a partial run into success.
+          ...(bulk ? {
+            sort_order: [{ direction: 'asc', field: 'driver_profile.created_date' }],
+          } : {}),
           limit,
           offset,
         }),
